@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 
+	"room-engine/consts/baserpcpb"
+	"room-engine/natsfx"
+	"room-engine/rpc"
+
 	"github.com/redis/go-redis/v9"
-	"gitlab-code.v.show/bygame/room-engine/consts/baserpcpb"
-	"gitlab-code.v.show/bygame/room-engine/natsfx"
-	"gitlab-code.v.show/bygame/room-engine/rpc"
 )
 
 func main() {

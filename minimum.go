@@ -6,12 +6,13 @@ import (
 	"reflect"
 	"time"
 
+	"room-engine/env"
+	"room-engine/logfx"
+	"room-engine/natsfx"
+	"room-engine/redisfx"
+	"room-engine/rpc"
+
 	"github.com/spf13/viper"
-	"gitlab-code.v.show/bygame/room-engine/env"
-	"gitlab-code.v.show/bygame/room-engine/logfx"
-	"gitlab-code.v.show/bygame/room-engine/natsfx"
-	"gitlab-code.v.show/bygame/room-engine/redisfx"
-	"gitlab-code.v.show/bygame/room-engine/rpc"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 )
@@ -100,26 +101,6 @@ func WithRpcHandlerConstructor(handlerConstructors ...any) func(*option) {
 	}
 }
 
-// WithComponentConstructor 有状态组件的构造函数
-// 注:这里的构造函数只能构造需要的单例对象
-// 例如:
-//
-//	type Room struct {
-//		  redis *redis.Client //redis 为需要的单例中间件
-//		  natsConn *natsfx.Conn //natsConn 为需要的单例中间件
-//	      currUid string   	// 业务数据 不能在Constructor中构造
-//	      m map[string]string // 业务数据 不能在Constructor中构造
-//	}
-//
-// Constructor如下:只能构造fx容器中的单例对象,返回的组件是作为单例保存的,最终创建单例组件的时候 会以这个单例为源头进行copy
-//
-//	func NewRoom(redis *redis.Client, natsConn *natsfx.Conn) *Room {
-//			//只能初始化单例对象 业务数据 不能在Constructor中构造!!(业务数据的初始放到OnStart的回调中)
-//			return &Room{redis: redis, natsConn: natsConn}
-//			//以下是错误示例 m不能再这里进行初始化,需要将其放在Onstart中
-//			return &Room{redis: redis, natsConn: natsConn,m: make(map[string]string)}
-//	}
-//
 // 最终 在请求创建创建房间的得处理中 会copy这个Component 作为源
 func WithComponentConstructor(componentConstructor ...any) func(*option) {
 	return func(inst *option) {

@@ -5,10 +5,11 @@ import (
 	"reflect"
 	"testing"
 
+	rme "room-engine"
+	"room-engine/mongofx"
+
 	"github.com/jinzhu/copier"
 	"github.com/redis/go-redis/v9"
-	rme "gitlab-code.v.show/bygame/room-engine"
-	"gitlab-code.v.show/bygame/room-engine/mongofx"
 )
 
 func TestCommonV2(t *testing.T) {

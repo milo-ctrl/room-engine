@@ -12,14 +12,15 @@ import (
 	"sync"
 	"time"
 
+	"room-engine/consts"
+	"room-engine/consts/baserpcpb"
+	"room-engine/env"
+	"room-engine/natsfx"
+	"room-engine/rpc"
+	"room-engine/serializer"
+
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
-	"gitlab-code.v.show/bygame/room-engine/consts"
-	"gitlab-code.v.show/bygame/room-engine/consts/baserpcpb"
-	"gitlab-code.v.show/bygame/room-engine/env"
-	"gitlab-code.v.show/bygame/room-engine/natsfx"
-	"gitlab-code.v.show/bygame/room-engine/rpc"
-	"gitlab-code.v.show/bygame/room-engine/serializer"
 	"go.uber.org/zap"
 )
 
@@ -148,6 +149,7 @@ func (h *Helper) GetUserInfoList(uids []string) ([]*baserpcpb.UserInfo, error) {
 	return resp.List, nil
 }
 
+// TODO 给lark发消息
 const (
 	larkMsg = `{"msg_type":"interactive","card":{"config":{"wide_screen_mode":true},"header":{"template":"green","title":{"tag":"plain_text","content":"[%s]启动%s"}},"elements":[{"tag":"markdown","content":"**环境**：%s\n**进程**：%s\n**版本**：%s"},{"tag":"hr"},{"tag":"note","elements":[{"tag":"plain_text","content":"party  game"}]}]}}`
 	larkUrl = "https://open.larksuite.com/open-apis/bot/v2/hook/52073365-e9a1-4fc4-b147-4a6fec98c1e7"

@@ -15,18 +15,19 @@ import (
 	"sync"
 	"time"
 
+	"room-engine/consts"
+	"room-engine/consts/gatepb"
+	"room-engine/env"
+	"room-engine/eventbus"
+	"room-engine/natsfx"
+	"room-engine/serializer"
+
 	"github.com/coder/websocket"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/cast"
 	"github.com/spf13/viper"
-	"gitlab-code.v.show/bygame/room-engine/consts"
-	"gitlab-code.v.show/bygame/room-engine/consts/gatepb"
-	"gitlab-code.v.show/bygame/room-engine/env"
-	"gitlab-code.v.show/bygame/room-engine/eventbus"
-	"gitlab-code.v.show/bygame/room-engine/natsfx"
-	"gitlab-code.v.show/bygame/room-engine/serializer"
 	"go.uber.org/fx"
 	"golang.org/x/time/rate"
 
@@ -135,6 +136,7 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 		uid = token
 	} else {
 		var err error
+		//TODO 这里是登陆修改这里就好
 		uid, err = g.verifyJwt(token, g.jwtKey)
 		if err != nil {
 			http.Error(w, "token parser fail", http.StatusForbidden)
@@ -143,6 +145,7 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	//TODO 需要去除liveID属性
 	liveId := query.Get("liveId")
 
 	if liveId == "" {
@@ -172,6 +175,7 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer singleSub.Unsubscribe()
+	//TODO 没啥用
 	liveSub, err := g.natsConn.ChanSubscribe(consts.SubjectComponentEventLiveHouse(liveId), msgChan) //直播全体event
 	if err != nil {
 		slog.Error("SubjectComponentEventLiveHouse fail", "err", err, "uid", uid)

@@ -10,10 +10,11 @@ import (
 	"slices"
 	"time"
 
+	"room-engine/env"
+
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	slogcommon "github.com/samber/slog-common"
 	slogzap "github.com/samber/slog-zap/v2"
-	"gitlab-code.v.show/bygame/room-engine/env"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"

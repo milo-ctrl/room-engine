@@ -5,9 +5,10 @@ import (
 	"errors"
 	"log/slog"
 
+	"room-engine/consts"
+	"room-engine/natsfx"
+
 	"github.com/nats-io/nats.go"
-	"gitlab-code.v.show/bygame/room-engine/consts"
-	"gitlab-code.v.show/bygame/room-engine/natsfx"
 	"go.uber.org/zap"
 )
 

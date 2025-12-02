@@ -1,12 +1,13 @@
 package main
 
 import (
+	"room-engine/env"
+	"room-engine/logfx"
+	"room-engine/natsfx"
+	"room-engine/redisfx"
+	"room-engine/rpc"
+
 	"github.com/coder/websocket"
-	"gitlab-code.v.show/bygame/room-engine/env"
-	"gitlab-code.v.show/bygame/room-engine/logfx"
-	"gitlab-code.v.show/bygame/room-engine/natsfx"
-	"gitlab-code.v.show/bygame/room-engine/redisfx"
-	"gitlab-code.v.show/bygame/room-engine/rpc"
 	"go.uber.org/fx"
 )
 

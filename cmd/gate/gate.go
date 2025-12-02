@@ -3,9 +3,10 @@ package main
 import (
 	"time"
 
+	rme "room-engine"
+	"room-engine/gatefx"
+
 	"github.com/spf13/viper"
-	rme "gitlab-code.v.show/bygame/room-engine"
-	"gitlab-code.v.show/bygame/room-engine/gatefx"
 	"go.uber.org/fx"
 )
 

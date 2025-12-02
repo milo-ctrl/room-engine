@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"time"
 
-	"gitlab-code.v.show/bygame/room-engine/consts"
-	"gitlab-code.v.show/bygame/room-engine/serializer"
+	"room-engine/consts"
+	"room-engine/serializer"
 )
 
 type Handler interface {

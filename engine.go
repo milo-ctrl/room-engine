@@ -16,13 +16,14 @@ import (
 	"time"
 	"unicode"
 
+	"room-engine/consts"
+	"room-engine/env"
+	"room-engine/natsfx"
+	"room-engine/serializer"
+
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/cast"
-	"gitlab-code.v.show/bygame/room-engine/consts"
-	"gitlab-code.v.show/bygame/room-engine/env"
-	"gitlab-code.v.show/bygame/room-engine/natsfx"
-	"gitlab-code.v.show/bygame/room-engine/serializer"
 	"go.uber.org/fx"
 )
 

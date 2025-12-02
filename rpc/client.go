@@ -9,13 +9,14 @@ import (
 	"strings"
 	"time"
 
+	"room-engine/consts"
+	"room-engine/consts/baserpcpb"
+	"room-engine/natsfx"
+	"room-engine/serializer"
+
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/cast"
-	"gitlab-code.v.show/bygame/room-engine/consts"
-	"gitlab-code.v.show/bygame/room-engine/consts/baserpcpb"
-	"gitlab-code.v.show/bygame/room-engine/natsfx"
-	"gitlab-code.v.show/bygame/room-engine/serializer"
 )
 
 type Client struct {
@@ -143,6 +144,7 @@ func (c *Client) Request(gameName, comKey, handle string, req, resp any) error {
 	return serializer.Default.Unmarshal(nRes.Data, resp)
 }
 
+// TODO 用不到
 // RequestInnerDisband 请求流局
 // 特殊发送方式
 func (c *Client) RequestInnerDisband(gameName, comKey, uid, liveId string) error {
@@ -161,6 +163,7 @@ func (c *Client) RequestInnerDisband(gameName, comKey, uid, liveId string) error
 	return err
 }
 
+// TODO 用不到
 // RequestInnerSurrender 请求投降
 // 特殊发送方式
 func (c *Client) RequestInnerSurrender(gameName, comKey, uid, liveId string) error {

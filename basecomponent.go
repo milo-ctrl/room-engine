@@ -11,16 +11,17 @@ import (
 	"sync"
 	"time"
 
+	"room-engine/consts"
+	"room-engine/consts/baserpcpb"
+	"room-engine/env"
+	"room-engine/eventbus"
+	"room-engine/natsfx"
+	"room-engine/serializer"
+
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
 	"github.com/spf13/cast"
-	"gitlab-code.v.show/bygame/room-engine/consts"
-	"gitlab-code.v.show/bygame/room-engine/consts/baserpcpb"
-	"gitlab-code.v.show/bygame/room-engine/env"
-	"gitlab-code.v.show/bygame/room-engine/eventbus"
-	"gitlab-code.v.show/bygame/room-engine/natsfx"
-	"gitlab-code.v.show/bygame/room-engine/serializer"
 
 	"github.com/nats-io/nats.go"
 )
@@ -155,83 +156,6 @@ func injectNewHandler(src Handler) (Handler, reflect.Value) {
 	}
 	return newVal.Interface().(Handler), newEle
 }
-
-//
-//func onComponentCreate(msg *nats.Msg, handler Handler, e *Engine) {
-//	defer func() {
-//		if err := recover(); err != nil {
-//			slog.Error("component Start panic", "err", err, "stack", Stack())
-//			createComponentErrResp(msg, -103, "component create panic")
-//		}
-//	}()
-//
-//	//检查传入参数的合法性
-//	req, uids, _, uidLiveIdMap, illegal := checkCreateComponentReq(msg)
-//	if illegal {
-//		return
-//	}
-//
-//	//检查uid是否可以开局
-//	if checkUids(e.ctx, e.redis, msg, uids) {
-//		return
-//	}
-//
-//	ins, insElem := injectNewHandler(handler)
-//
-//	field := insElem.FieldByName("BaseComponent")
-//	bt := field.Addr().Interface().(*BaseComponent)
-//	ctx, cancel := context.WithCancelCause(e.ctx)
-//	id, _ := uuid.NewV7()
-//	bt.ID = id.String()
-//	bt.inbox = make(chan *nats.Msg, 2048)
-//	bt.invokeChan = make(chan *invoke, 256)
-//	bt.ctx = ctx
-//	bt.cancel = cancel
-//	bt.uidLiveIdMap = uidLiveIdMap
-//	bt.instance = ins
-//	bt.Logger = slog.With("cid", bt.ID)
-//	bt.Redis = e.redis
-//	bt.NatsConn = e.natsConn
-//	bt.EnvBase = *e.envBase
-//	bt.Helper = e.helper
-//	bt.methodMap = e.methodMap
-//	bt.clearWg = e.clearWg
-//	bt.modeId = req.ModeId
-//
-//	//清理资源
-//	defer bt.componentClear()
-//
-//	//订阅nats
-//	if bt.doSubscribe(msg, uids) {
-//		return
-//	}
-//
-//	//记录uid和组件的关联信息
-//	if bt.setUidComInfo(msg, uids) {
-//		return
-//	}
-//	//h := ins.(Handler)
-//	err := ins.OnStart(req)
-//	if err != nil {
-//		bt.Logger.Error("component OnStart fail", "err", err)
-//		createComponentErrResp(msg, -105, err.Error())
-//		cancel(fmt.Errorf("OnStart err:%w", err))
-//		return
-//	}
-//	bt.componentChange(true)
-//	Go(bt.loop)               // 启动loop
-//	Go(bt.eventComponentInfo) //定时上报对局事件
-//
-//	resp := &baserpcpb.CreateComponentResp{
-//		ComponentId: bt.ID,
-//	}
-//	seria := serializer.GetSerializer(cast.ToInt(msg.Header.Get(consts.HeaderReqType)))
-//	bts, _ := seria.Marshal(resp)
-//	_ = msg.Respond(bts)
-//
-//	//这里存一些Component的数量
-//	bt.Redis.Incr(ctx, consts.RdsKeyProcAlive(bt.EnvBase.ProcName))
-//}
 
 func onComponentCreate(msg *nats.Msg, handler Handler, e *Engine) {
 	defer func() {
@@ -539,31 +463,6 @@ func createComponentErrResp(msg *nats.Msg, code int, errMsg string) {
 	_ = msg.Respond(bts)
 }
 
-//func checkUids(ctx context.Context, rds *redis.Client, msg *nats.Msg, uids []string) bool {
-//	//检查uid是否可以开局,用记录成功的comInfo来判断
-//	checkedUids := make([]string, 0, len(uids))
-//	for _, uid := range uids {
-//		//原子命令来保证幂等性
-//		key := consts.RdsKeyUidComponentInfo(uid)
-//		nx := rds.HSetNX(ctx, key, consts.ComInfo{}.Uid_(), uid).Val()
-//		rds.Expire(ctx, key, 60*time.Second) //设定一个过期保底
-//		if !nx {
-//			//一个没成功  回滚已经设置成功的
-//			for _, checkedUid := range checkedUids {
-//				_, _ = rds.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-//					pipe.Del(ctx, consts.RdsKeyUidComponentInfo(checkedUid))
-//					return nil
-//				})
-//			}
-//			slog.Error("component create fail3", "uid", uid)
-//			createComponentErrResp(msg, -103, "component create fail3")
-//			return true
-//		}
-//		checkedUids = append(checkedUids, uid)
-//	}
-//	return false
-//}
-
 func (bt *BaseComponent) componentClear() {
 	//cancel 后自动清理
 	bt.clearWg.Add(1)
@@ -593,139 +492,6 @@ func (bt *BaseComponent) componentClear() {
 		bt.Logger.Info("clear component", "cause", context.Cause(bt.ctx))
 	})
 }
-
-//func (bt *BaseComponent) doSubscribe(msg *nats.Msg, uids []string) bool {
-//	var err error
-//	for _, uid := range uids {
-//		ps := &playerSource{
-//			Uid:    uid,
-//			liveId: bt.uidLiveIdMap[uid],
-//		}
-//		bt.playerSource.Store(uid, ps)
-//		{
-//			//订阅主请求subject
-//			suj := consts.SubjectReqRet(bt.EnvBase.GameName, bt.instance.Key(), uid)
-//			sub, subErr := bt.NatsConn.ChanSubscribe(suj, bt.inbox)
-//			if subErr != nil {
-//				err = fmt.Errorf("SubjectReqRet:%w", subErr) //有一个订阅失败  那么就终止
-//				break
-//			}
-//			ps.playerSub = sub
-//		}
-//		{
-//			//订阅直播间的请求 此类请求不走Component的单线程中
-//			//例如拉取房间信息 请求量大 独立协程处理
-//			suj := consts.SubjectReqRetLiveHouse(bt.EnvBase.GameName, bt.instance.Key(), ps.liveId)
-//			sub, subErr := bt.NatsConn.QueueSubscribe(suj, "liveSub", func(msg *nats.Msg) { //带Queue订阅 重复也没关系 不会重复消息
-//				cmd := msg.Header.Get(consts.HeaderCmd)
-//				if cmd == "" {
-//					_ = msg.Respond(nil)
-//					return
-//				}
-//				Go(func() {
-//					if msg.Header == nil {
-//						msg.Header = nats.Header{}
-//					}
-//					msg.Header.Set(consts.HeaderLiveId, ps.liveId)
-//					bt.onComponentRequest(msg)
-//				})
-//			})
-//			if subErr != nil {
-//				err = fmt.Errorf("SubjectReqRetLiveHouse:%w", subErr) //有一个订阅失败  那么就终止
-//				break
-//			}
-//			ps.liveSub = sub
-//		}
-//		{
-//			//订阅上下线事件
-//			connChangedTopic := consts.EventTopicUserConnChanged(uid)
-//			sub, subErr := eventbus.Subscribe(bt.NatsConn, bt.ID, connChangedTopic, func(event *consts.EventUserConnChanged) {
-//				bt.AfterFunc(0, func() bool {
-//					bt.instance.OnUserConnChanged(event)
-//					return true
-//				})
-//
-//			})
-//			if subErr != nil {
-//				err = fmt.Errorf("EventTopicUserConnChanged:%w", subErr) //有一个订阅失败  那么就终止
-//				break
-//			}
-//			ps.connChangeSub = sub
-//		}
-//	}
-//	if err != nil { //订阅错误
-//		bt.Logger.Error("component create fail", "err", err)
-//		createComponentErrResp(msg, -101, "component create fail")
-//		bt.cancel(ErrCauseComponentCancel)
-//		return true
-//	}
-//	err = bt.NatsConn.FlushTimeout(200 * time.Millisecond) //保证订阅可用
-//	if err != nil {
-//		bt.Logger.Error("flushTimeout err", "err", err) //做个记录监控
-//	}
-//
-//	return false
-//}
-
-// 设置uid com之间的映射关系
-//func (bt *BaseComponent) setUidComInfo(msg *nats.Msg, uids []string) bool {
-//	ex := time.Second * 120
-//	pipeliner := bt.Redis.Pipeline()
-//	for _, uid := range uids {
-//		//设置uid的组件信息
-//		comInfo := &consts.ComInfo{
-//			ComId:    bt.ID,
-//			ComKey:   bt.instance.Key(),
-//			CreateTs: time.Now().Unix(),
-//			GameName: bt.EnvBase.GameName,
-//			ProcName: bt.EnvBase.ProcName,
-//			LiveId:   bt.uidLiveIdMap[uid],
-//			Uid:      uid,
-//		}
-//		key := consts.RdsKeyUidComponentInfo(uid)
-//		pipeliner.HSet(bt.ctx, key, comInfo)
-//		pipeliner.Expire(bt.ctx, key, ex)
-//
-//		//写入直播间id关联的所有uid
-//		//map结构 value为uid实际所在的直播间
-//		key = consts.RdsKeyLiveIdUids(bt.uidLiveIdMap[uid])
-//		pipeliner.HSet(bt.ctx, key, bt.uidLiveIdMap) // 重复写入会覆盖 这里不处理了
-//		pipeliner.Expire(bt.ctx, key, ex)
-//	}
-//	_, setErr := pipeliner.Exec(bt.ctx)
-//
-//	if setErr != nil {
-//		bt.Logger.Error("component create fail2", "err", setErr)
-//		createComponentErrResp(msg, -102, "component create fail2")
-//		bt.cancel(ErrCauseComponentCancel)
-//		return true
-//	}
-//
-//	//对ComponentInfo续约
-//	Go(func() {
-//		tick := time.Tick(ex/2 - 10*time.Second)
-//		for {
-//			select {
-//			case <-tick:
-//				{
-//					_, _ = bt.Redis.Pipelined(bt.ctx, func(pipe redis.Pipeliner) error {
-//						bt.playerSource.Range(func(k, v any) bool {
-//							uid := k.(string)
-//							ps := v.(*playerSource)
-//							pipe.Expire(bt.ctx, consts.RdsKeyUidComponentInfo(uid), ex)
-//							pipe.Expire(bt.ctx, consts.RdsKeyLiveIdUids(ps.liveId), ex)
-//							return true
-//						})
-//						return nil
-//					})
-//				}
-//			case <-bt.ctx.Done():
-//				return
-//			}
-//		}
-//	})
-//	return false
-//}
 
 // 事件上报对局信息
 func (bt *BaseComponent) eventComponentInfo() {

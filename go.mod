@@ -1,4 +1,4 @@
-module gitlab-code.v.show/bygame/room-engine
+module room-engine
 
 go 1.24.2
 
