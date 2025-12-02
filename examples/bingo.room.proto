@@ -1,0 +1,17 @@
+syntax = "proto3"; // 指定proto版本
+option go_package = "./roompb";
+package proto_cmd;
+
+//protoc --go_out=./  --proto_path=./  ./*.proto
+
+//有状态组件 必须定义这这个通用协议
+message GetComponentDetailReq {
+}
+message GetComponentDetailResp {
+  RoomInfo roomInfo = 1;
+}
+
+message RoomInfo {
+  int32 lastPlayCard = 1;
+  int64 ver = 2;
+}

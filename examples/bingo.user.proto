@@ -1,0 +1,19 @@
+syntax = "proto3"; // 指定proto版本
+option go_package = "./userpb";
+package proto_cmd;
+
+//protoc --go_out=./  --proto_path=./  ./*.proto
+
+
+//样例的请求定义方式
+//proto文件命名: gameName.componentKey.proto
+//消息结构体  方法名为HandleGetUserInfo 结构体就是GetUserInfo开头 成对出现
+// 请求 以Req结尾  响应  以Resp结尾
+// 以上规则约定均是严格要求  不匹配将会找不到路由或者序列化反序列化错误
+message GetUserInfoReq {
+
+}
+message GetUserInfoResp {
+  string name = 1;
+  int32 age = 2;
+}

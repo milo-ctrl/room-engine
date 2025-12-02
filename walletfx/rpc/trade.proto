@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package wallet;
+
+option go_package = "../rpc";
+
+//protoc --go_out=./ --go-grpc_out=./  --proto_path=./  ./*.proto
+
+/**
+ * 交易服务
+ */
+service TradeService {
+  // 批量扣减资源
+  rpc Deduct(TradeRequest) returns (TradeResponse) {}
+
+  // 批量发放资源
+  rpc Reward(TradeRequest) returns (TradeResponse) {}
+
+  // 订单退款
+  rpc Refund(RefundRequest) returns (TradeResponse) {}
+}
+
+/**
+ *  交易请求参数.
+ */
+message TradeRequest {
+  // 请求时间戳
+  uint32 time = 1;
+
+  // 业务-订单号
+  string bizNo = 2;
+
+  // 资源类型 1 金币
+  uint32 resourceType = 3;
+
+  // 业务类型
+  // Deduct: 1 party 游戏房扣钱
+  // Reward: 1 party 游戏房结算
+  uint32 bizType = 4;
+
+  // 业务明细
+  repeated TradeDetail detail = 5;
+
+  // 游戏标识
+  string gameId = 6;
+}
+
+/**
+ *  交易明细.
+ */
+message TradeDetail  {
+  // 用户ID
+  uint32 uid = 1;
+  // 资源数量
+  uint32 amount = 2;
+  // 用户订单号
+  string userOrderNo = 3;
+}
+
+/**
+  *  响应参数.
+ */
+message TradeResponse {
+  uint32 code = 1;
+  string message = 2;
+}
+
+/**
+  *  退款请求参数.
+ */
+message RefundRequest {
+  // 请求时间戳
+  uint32 time = 1;
+
+  // 业务-订单号
+  string bizNo = 2;
+
+  // 业务类型 1 party 房流局退款
+  uint32 bizType = 3;
+
+  // 游戏标识
+  string gameId = 4;
+}

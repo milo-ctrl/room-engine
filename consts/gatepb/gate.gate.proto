@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package gatepb;
+option go_package = "../gatepb";
+
+//protoc --go_out=./  --proto_path=./  ./*.proto
+
+message BaseMsg {
+  string cmd = 1;
+  bytes data = 2;
+  string errMsg = 3;
+  int32 code = 4;
+  int32 reqId = 5;
+}
+
+//心跳
+message PingReq {
+  string  forwardToGameName = 1; //转发到游戏 为空则不转发 网关直接回复了
+}
+message PingResp {
+  int64 ts = 1;
+  int64 forwardTs  = 2;
+  int64 forwardState = 3; //目标状态 0:正常回复 1:转发目标游戏房间不存在了
+}
+
+//告诉客户端要断线 (顶号)
+message EventDisconnect {
+}
