@@ -258,7 +258,7 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 				}
 			case <-pingCheckTick:
 				{
-					if time.Now().Sub(lastPingTime) >= 30*time.Second { //客户端3次心跳没收到
+					if time.Since(lastPingTime) >= 30*time.Second { //客户端3次心跳没收到
 						cancelFunc(errors.New("ping checker timeout"))
 						return
 					}
@@ -400,10 +400,11 @@ func (g *Gate) ping(baseMsg *gatepb.BaseMsg, conn *websocket.Conn, liveId string
 
 // 发送用户生命周期事件 tp:0断开 1连接
 func (g *Gate) publishUserLifeEvent(uid, liveId, connId string, state int) {
-	if state == 1 {
+	switch state {
+	case 1:
 		g.redis.HSet(context.Background(), consts.RdsKeyUserOnlineState(uid), "connectTs", time.Now().Unix())
 		g.redis.Expire(context.Background(), consts.RdsKeyUserOnlineState(uid), 130*time.Second) //和客户端约定60s发送一次ping
-	} else if state == 0 {
+	case 0:
 		g.redis.Del(context.Background(), consts.RdsKeyUserOnlineState(uid))
 	}
 
@@ -533,4 +534,28 @@ func (g *Gate) health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = w.Write([]byte("ok"))
+}
+
+func (g *Gate) verifyZijie(tokenString, jwtKey string) (string, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return []byte(jwtKey), nil
+	})
+	if err != nil {
+		return "", err
+	}
+	if !token.Valid {
+		return "", errors.New("invalid token")
+	}
+	if m, ok := token.Claims.(jwt.MapClaims); ok {
+		if uid, ok := m["uid"]; ok {
+			return cast.ToStringE(uid)
+		}
+		if uid, ok := m["jti"]; ok {
+			return cast.ToStringE(uid)
+		}
+	}
+	return "", errors.New("token payload parse fail")
 }

@@ -31,6 +31,7 @@ require (
 require (
 	fyne.io/systray v1.11.0 // indirect
 	github.com/BurntSushi/toml v1.5.0 // indirect
+	github.com/bytedance/douyin-openapi-sdk-go v1.0.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/fredbi/uri v1.1.0 // indirect
