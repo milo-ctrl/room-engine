@@ -14,7 +14,6 @@ func EventTopicUserConnChanged(uid string) string {
 // 网关发出
 type EventUserConnChanged struct {
 	Uid    string `json:"uid"`    //uid
-	LiveId string `json:"liveId"` //直播间id
 	State  int    `json:"state"`  //0下线 1上线
 	ConnId string `json:"connId"` //为每个ws链接生成的唯一id
 }
@@ -43,8 +42,7 @@ type EventComponentRunning struct {
 }
 
 type EventUserHeartbeat struct {
-	Uid    string `json:"uid"`
-	LiveId string `json:"liveId"`
+	Uid string `json:"uid"`
 }
 
 type EventFailedOrder[T any] struct {

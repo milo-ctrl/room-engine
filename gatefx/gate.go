@@ -22,16 +22,17 @@ import (
 	"room-engine/natsfx"
 	"room-engine/serializer"
 
+	credential "github.com/bytedance/douyin-openapi-credential-go/client"
+	openApiSdkClient "github.com/bytedance/douyin-openapi-sdk-go/client"
 	"github.com/coder/websocket"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/cast"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
 	"golang.org/x/time/rate"
-
-	"github.com/nats-io/nats.go"
 )
 
 type Gate struct {
@@ -137,21 +138,14 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 	} else {
 		var err error
 		//TODO 这里是登陆修改这里就好
-		uid, err = g.verifyJwt(token, g.jwtKey)
+		uid, err = g.AppsJscode2session(token)
 		if err != nil {
 			http.Error(w, "token parser fail", http.StatusForbidden)
-			slog.Error("verifyJwt jwt fail", "err", err)
+			slog.Error("douyin login fail", "err", err)
 			return
 		}
 	}
 
-	//TODO 需要去除liveID属性
-	liveId := query.Get("liveId")
-
-	if liveId == "" {
-		http.Error(w, "liveId empty", http.StatusBadRequest)
-		return
-	}
 	ctx, cancelFunc := context.WithCancelCause(r.Context())
 	defer cancelFunc(errors.New("defer"))
 
@@ -175,14 +169,6 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer singleSub.Unsubscribe()
-	//TODO 没啥用
-	liveSub, err := g.natsConn.ChanSubscribe(consts.SubjectComponentEventLiveHouse(liveId), msgChan) //直播全体event
-	if err != nil {
-		slog.Error("SubjectComponentEventLiveHouse fail", "err", err, "uid", uid)
-		http.Error(w, "SubjectComponentEventLiveHouse err", http.StatusBadRequest)
-		return
-	}
-	defer liveSub.Unsubscribe()
 
 	conn, err := websocket.Accept(w, r, wsAcceptOpt)
 	if err != nil {
@@ -197,16 +183,16 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		cause := context.Cause(ctx)
 		conn.CloseNow()
-		slog.Debug("websocket close", "uid", uid, "liveId", liveId, "connId", connId, "cause", cause)
+		slog.Debug("websocket close", "uid", uid, "connId", connId, "cause", cause)
 	}()
-	slog.Debug("websocket accept", "uid", uid, "liveId", liveId, "connId", connId)
+	slog.Debug("websocket accept", "uid", uid, "connId", connId)
 
 	g.wsWg.Add(1)
 	defer g.wsWg.Done()
 
 	//上线下线发布一个事件
-	g.publishUserLifeEvent(uid, liveId, connId, 1)       //上线
-	defer g.publishUserLifeEvent(uid, liveId, connId, 0) //下线
+	g.publishUserLifeEvent(uid, connId, 1)       //上线
+	defer g.publishUserLifeEvent(uid, connId, 0) //下线
 
 	var errResp = func(baseMsg *gatepb.BaseMsg, code int32, errMsg string) {
 		baseMsg.Data = nil
@@ -298,37 +284,29 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 		//特殊心跳消息
 		if handle == "ping" {
 			lastPingTime = time.Now()
-			if pingErr := g.ping(baseMsg, conn, liveId); pingErr != nil {
-				cancelFunc(fmt.Errorf("ping Write:%w", pingErr))
-				return
-			}
+			//TODO 这里确实需要一个房间ID, 心跳到哪一个房间内, 知道房间是否还存在, 后面想想怎么处理
+			// if pingErr := g.ping(baseMsg, conn, liveId); pingErr != nil {
+			// 	cancelFunc(fmt.Errorf("ping Write:%w", pingErr))
+			// 	return
+			// }
 			allowed := pingLimiter.AllowN(time.Now(), 1)
 			if allowed {
 				g.redis.Expire(g.ctx, consts.RdsKeyUserOnlineState(uid), 130*time.Second)
 				eventbus.Publish(g.natsConn, consts.EventTopicUserHeartbeat, &consts.EventUserHeartbeat{
-					LiveId: liveId,
-					Uid:    uid,
+					Uid: uid,
 				})
 			}
 			continue
 		}
 
-		suj := ""
-		if strings.EqualFold(handle, consts.CmdGetComponentDetail) {
-			//GetComponentDetail 为专用协议 用于获取组件详情 需要发送到专用的subject去
-			//用liveId做的监听
-			suj = consts.SubjectReqRetLiveHouse(gameName, comKey, liveId)
-		} else {
-			suj = consts.SubjectReqRet(gameName, comKey, uid)
-		}
+		suj := consts.SubjectReqRet(gameName, comKey, uid)
 
 		nasMsg := g.natsMsgPool.Get().(*nats.Msg)
 		nasMsg.Subject = suj
 		nasMsg.Data = baseMsg.Data
 		nasMsg.Header = nats.Header{
-			consts.HeaderCmd:    []string{strings.Join(sp[1:], ".")},
-			consts.HeaderUid:    []string{uid},
-			consts.HeaderLiveId: []string{liveId},
+			consts.HeaderCmd: []string{strings.Join(sp[1:], ".")},
+			consts.HeaderUid: []string{uid},
 		}
 
 		retMag, err := g.natsConn.RequestMsg(nasMsg, 5*time.Second)
@@ -399,7 +377,7 @@ func (g *Gate) ping(baseMsg *gatepb.BaseMsg, conn *websocket.Conn, liveId string
 }
 
 // 发送用户生命周期事件 tp:0断开 1连接
-func (g *Gate) publishUserLifeEvent(uid, liveId, connId string, state int) {
+func (g *Gate) publishUserLifeEvent(uid, connId string, state int) {
 	switch state {
 	case 1:
 		g.redis.HSet(context.Background(), consts.RdsKeyUserOnlineState(uid), "connectTs", time.Now().Unix())
@@ -411,7 +389,6 @@ func (g *Gate) publishUserLifeEvent(uid, liveId, connId string, state int) {
 	//发送上线下线事件
 	e := consts.EventUserConnChanged{
 		Uid:    uid,
-		LiveId: liveId,
 		State:  state,
 		ConnId: connId,
 	}
@@ -536,26 +513,39 @@ func (g *Gate) health(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("ok"))
 }
 
-func (g *Gate) verifyZijie(tokenString, jwtKey string) (string, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
-		}
-		return []byte(jwtKey), nil
-	})
+/**
+ * 抖音登陆
+ */
+func (g *Gate) AppsJscode2session(loginCode string) (string, error) {
+	// 初始化SDK client
+	opt := new(credential.Config).
+		SetClientKey(g.envBase.DouyinAppId).       // 改成自己的app_id
+		SetClientSecret(g.envBase.DouyinAppSecret) // 改成自己的secret
+	sdkClient, err := openApiSdkClient.NewClient(opt)
 	if err != nil {
-		return "", err
+		slog.Error("sdk init err:", "err", err)
+		return "", errors.New("sdk parse fail")
 	}
-	if !token.Valid {
-		return "", errors.New("invalid token")
+
+	/* 构建请求参数，该代码示例中只给出部分参数，请用户根据需要自行构建参数值
+	   	token:
+	   	   1.若用户自行维护token,将用户维护的token赋值给该参数即可
+	          2.SDK包中有获取token的函数，请根据接口path在《OpenAPI SDK 总览》文档中查找获取token函数的名字
+	            在使用过程中，请注意token互刷问题
+	       header:
+	          sdk中默认填充content-type请求头，若不需要填充除content-type之外的请求头，删除该参数即可
+	*/
+	sdkRequest := &openApiSdkClient.AppsJscode2sessionRequest{}
+	sdkRequest.SetAnonymousCode(g.envBase.DouyinAppId)
+	sdkRequest.SetCode(loginCode) // 前端获取的code
+	sdkRequest.SetAppid(g.envBase.DouyinAppId)
+	sdkRequest.SetSecret(g.envBase.DouyinAppSecret)
+	// sdk调用
+	sdkResponse, err := sdkClient.AppsJscode2session(sdkRequest)
+	if err != nil {
+		slog.Error("sdk call err:", "err", err)
+		return "", errors.New("sdk call fail")
 	}
-	if m, ok := token.Claims.(jwt.MapClaims); ok {
-		if uid, ok := m["uid"]; ok {
-			return cast.ToStringE(uid)
-		}
-		if uid, ok := m["jti"]; ok {
-			return cast.ToStringE(uid)
-		}
-	}
-	return "", errors.New("token payload parse fail")
+	slog.Error("sdk call sucess:", "sdkResponse", sdkResponse)
+	return *sdkResponse.Openid, nil
 }

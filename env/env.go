@@ -14,15 +14,18 @@ import (
 
 // Base 基础的必要的ENV
 type Base struct {
-	ProcName      string `mapstructure:"PROC_NAME"`
-	GameName      string `mapstructure:"GAME_NAME"`
-	GameId        string `mapstructure:"GAME_ID"`
-	LogLevel      string `mapstructure:"LOG_LEVEL"`
-	LogDir        string `mapstructure:"LOG_DIR"`
-	Environment   string `mapstructure:"ENVIRONMENT"`
-	Version       string `mapstructure:"VERSION"`        //服务版本号
-	ClientVersion string `mapstructure:"CLIENT_VERSION"` //支持的客户端最小版本号
-	RdsKeyPrefix  string `mapstructure:"RDS_KEY_PREFIX"` //redis key前缀
+	ProcName        string `mapstructure:"PROC_NAME"`
+	GameName        string `mapstructure:"GAME_NAME"`
+	GameId          string `mapstructure:"GAME_ID"`
+	LogLevel        string `mapstructure:"LOG_LEVEL"`
+	LogDir          string `mapstructure:"LOG_DIR"`
+	Environment     string `mapstructure:"ENVIRONMENT"`
+	Version         string `mapstructure:"VERSION"`        //服务版本号
+	ClientVersion   string `mapstructure:"CLIENT_VERSION"` //支持的客户端最小版本号
+	RdsKeyPrefix    string `mapstructure:"RDS_KEY_PREFIX"` //redis key前缀
+	DouyinAppId     string `mapstructure:"DOUYIN_APPID"`
+	DouyinAppSecret string `mapstructure:"DOUYIN_APPSECRET"`
+	DouyinAppToken  string `mapstructure:"DOUYIN_APPTOKEN"`
 }
 
 var Instance *Base
