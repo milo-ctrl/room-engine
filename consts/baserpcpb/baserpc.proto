@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package baserpcpb;
+option go_package = "../baserpcpb";
+
+//protoc --go_out=./  --proto_path=./  ./*.proto
+
+message UserInfo {
+  string uid = 1;
+  string package = 2;
+  string channel = 3;
+  string nickname = 4;
+  string avatar = 5;
+  string country = 6;
+  string birthday = 7; // 生日 20220301
+  string gender = 8; // 1 男 2女
+  uint64 createdAt = 9; // 注册时间戳
+  uint64 lastLoginAt = 10; // 最近登录时间戳
+  uint32 state = 11;
+}
+
+message GetUserInfoReq {
+  string uid = 1;
+}
+message GetUserInfoResp {
+  UserInfo userInfo = 1;
+}
+
+message GetUserInfoListReq {
+  repeated string uids = 1;
+}
+
+message GetUserInfoListResp {
+  repeated UserInfo list = 1;
+}
+
+
+
+
+message Team {
+  string teamId = 1;
+  repeated Player players = 2;
+}
+
+
+message Player {
+  string uid = 1;
+  string liveHouseId = 2; // 直播间id (Live room ID)
+  int32 site = 3;         // 座位号 (Seat number)
+}
+
+// CreateComponentReq 创建组件请求 
+message CreateComponentReq {
+  string clientVersion = 1; // 客户端版本号
+  int32 modeId = 2;         // 匹配模式id
+  repeated Team teams = 3;  // 队伍
+  string extra = 4;         // 额外参数 游戏内需要的自行解析成对应的自定义结构
+}
+
+// CreateComponentResp 创建组件返回
+message CreateComponentResp {
+  int32 code = 1;
+  string errMsg = 2;
+  string componentId = 3;
+}
