@@ -396,10 +396,11 @@ func (bt *BaseComponent) subUserSource(uid string) (err error) {
 func (bt *BaseComponent) renewalResource() {
 	//对ComponentInfo续约
 	Go(func() {
-		tick := time.Tick(componentInfoEx/2 - 10*time.Second)
+		ticker := time.NewTicker(componentInfoEx/2 - 10*time.Second)
+		defer ticker.Stop()
 		for {
 			select {
-			case <-tick:
+			case <-ticker.C:
 				{
 					_, _ = bt.Redis.Pipelined(bt.ctx, func(pipe redis.Pipeliner) error {
 						bt.playerSource.Range(func(k, v any) bool {
@@ -497,10 +498,11 @@ func (bt *BaseComponent) componentClear() {
 func (bt *BaseComponent) eventComponentInfo() {
 	uids := make([]string, 0)
 	liveIds := make([]string, 0)
-	tick := time.Tick(30 * time.Second)
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
 	for {
 		select {
-		case <-tick:
+		case <-ticker.C:
 			{
 				bt.playerSource.Range(func(key, value any) bool {
 					uids = append(uids, key.(string))
@@ -526,7 +528,8 @@ func (bt *BaseComponent) eventComponentInfo() {
 
 func (bt *BaseComponent) loop() {
 	end := false
-	tick := time.Tick(bt.tickInterval)
+	ticker := time.NewTicker(bt.tickInterval)
+	defer ticker.Stop()
 	for !end {
 		func() {
 			defer func() {
@@ -552,7 +555,7 @@ func (bt *BaseComponent) loop() {
 					success := ik.fun()
 					bt.componentChange(success)
 				}
-			case t := <-tick:
+			case t := <-ticker.C:
 				{
 					success := bt.instance.Tick(t)
 					bt.componentChange(success)

@@ -9,7 +9,6 @@ require (
 	github.com/bytedance/douyin-openapi-sdk-go v1.0.3
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/coder/websocket v1.8.13
-	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
 	github.com/jinzhu/copier v0.4.0
 	github.com/lestrrat-go/file-rotatelogs v2.4.0+incompatible

@@ -47,9 +47,6 @@ func FxLogger(slogger *slog.Logger, v *viper.Viper) fxevent.Logger {
 type option struct {
 	//fx 的options 需要注入进fx容器中的fx.Option
 	fxOptions []fx.Option
-
-	//空结构的components
-	emptyComponents []Handler
 }
 
 func Run(opts ...func(*option)) {

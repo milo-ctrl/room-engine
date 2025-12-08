@@ -3,7 +3,7 @@ package gatefx
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
+
 	"errors"
 	"fmt"
 	"io"
@@ -25,7 +25,7 @@ import (
 	credential "github.com/bytedance/douyin-openapi-credential-go/client"
 	openApiSdkClient "github.com/bytedance/douyin-openapi-sdk-go/client"
 	"github.com/coder/websocket"
-	"github.com/golang-jwt/jwt/v5"
+
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
@@ -43,22 +43,26 @@ type Gate struct {
 	ctx         context.Context
 	cancel      context.CancelCauseFunc
 	envBase     *env.Base
-	jwtKey      string
-	apiSalt     string
+
+
 	baseMsgPool sync.Pool
 	natsMsgPool sync.Pool
 }
 
 var Module = fx.Module("gate",
 	fx.Provide(NewGate),
-	fx.Provide(fx.Annotate(func(v *viper.Viper) (int, string, string) {
-		return v.GetInt("SERVE_PORT"), v.GetString("JWT_KEY"), v.GetString("API_SALT")
-	}, fx.ResultTags(`name:"ServePort"`, `name:"JwtKey"`, `name:"ApiSalt"`)), fx.Private),
-	fx.Invoke(func(lc fx.Lifecycle, g *Gate, envBase *env.Base) {
+	fx.Provide(fx.Annotate(func(v *viper.Viper) int {
+		return v.GetInt("SERVE_PORT")
+	}, fx.ResultTags(`name:"ServePort"`)), fx.Private),
+	fx.Invoke(func(lc fx.Lifecycle, g *Gate, envBase *env.Base) error {
+		if g == nil {
+			return fmt.Errorf("gate not initialized")
+		}
 		if envBase.Environment == env.Dev { //开发环境内嵌的网关 才会启动
 			lc.Append(fx.StopHook(func() { g.Stop(10 * time.Minute) }))
 			g.Run()
 		}
+		return nil
 	}),
 )
 
@@ -68,18 +72,33 @@ type NewGateIn struct {
 	ServePort int `name:"ServePort"`
 	Redis     *redis.Client
 	EnvBase   *env.Base
-	JwtKey    string `name:"JwtKey"`
-	ApiSalt   string `name:"ApiSalt"`
+
+
 }
 
-func NewGate(p NewGateIn) *Gate {
+func NewGate(p NewGateIn) (*Gate, error) {
+	// 参数校验
+	if p.ServePort <= 0 || p.ServePort > 65535 {
+		return nil, fmt.Errorf("invalid SERVE_PORT: %d, must be between 1 and 65535", p.ServePort)
+	}
+
+	if p.NatsConn == nil {
+		return nil, fmt.Errorf("NATS connection not initialized")
+	}
+	if p.Redis == nil {
+		return nil, fmt.Errorf("Redis connection not initialized")
+	}
+	if p.EnvBase == nil {
+		return nil, fmt.Errorf("environment base config not initialized")
+	}
+
 	g := &Gate{
 		natsConn:  p.NatsConn,
 		servePort: p.ServePort,
 		redis:     p.Redis,
 		envBase:   p.EnvBase,
-		jwtKey:    p.JwtKey,
-		apiSalt:   p.ApiSalt,
+
+
 	}
 	g.baseMsgPool.New = func() interface{} {
 		return &gatepb.BaseMsg{}
@@ -88,7 +107,7 @@ func NewGate(p NewGateIn) *Gate {
 		return &nats.Msg{}
 	}
 	g.ctx, g.cancel = context.WithCancelCause(context.Background())
-	return g
+	return g, nil
 }
 
 func (g *Gate) Run() {
@@ -207,8 +226,9 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 	//限速
 	pingLimiter := rate.NewLimiter(rate.Every(50*time.Second), 1)
 	lastPingTime := time.Now()
-	pingCheckTick := time.Tick(35 * time.Second)
+	pingCheckTicker := time.NewTicker(35 * time.Second)
 	go func() {
+		defer pingCheckTicker.Stop()
 		for {
 			select {
 			case msg := <-msgChan:
@@ -242,7 +262,7 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 					cancelFunc(fmt.Errorf("multiConnChan Write:%w", err))
 					return
 				}
-			case <-pingCheckTick:
+			case <-pingCheckTicker.C:
 				{
 					if time.Since(lastPingTime) >= 30*time.Second { //客户端3次心跳没收到
 						cancelFunc(errors.New("ping checker timeout"))
@@ -395,29 +415,7 @@ func (g *Gate) publishUserLifeEvent(uid, connId string, state int) {
 	eventbus.Publish(g.natsConn, consts.EventTopicUserConnChanged(uid), e)
 }
 
-func (g *Gate) verifyJwt(tokenString, jwtKey string) (string, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
-		}
-		return []byte(jwtKey), nil
-	})
-	if err != nil {
-		return "", err
-	}
-	if !token.Valid {
-		return "", errors.New("invalid token")
-	}
-	if m, ok := token.Claims.(jwt.MapClaims); ok {
-		if uid, ok := m["uid"]; ok {
-			return cast.ToStringE(uid)
-		}
-		if uid, ok := m["jti"]; ok {
-			return cast.ToStringE(uid)
-		}
-	}
-	return "", errors.New("token payload parse fail")
-}
+
 
 func (g *Gate) apiHandle(w http.ResponseWriter, r *http.Request) {
 	//if r.Method != http.MethodPost {
@@ -440,8 +438,7 @@ func (g *Gate) apiHandle(w http.ResponseWriter, r *http.Request) {
 	header := r.Header
 	ts := cast.ToInt64(header.Get("ts")) //秒级别字符串
 	randStr := header.Get("randStr")     //随机字符串 每次请求唯一
-	sign := header.Get("sign")
-	if ts < time.Now().Unix()-60 || sign == "" || randStr == "" {
+	if ts < time.Now().Unix()-60 || randStr == "" {
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
@@ -454,18 +451,6 @@ func (g *Gate) apiHandle(w http.ResponseWriter, r *http.Request) {
 	bodyBts := make([]byte, buffer.Len())
 	copy(bodyBts, buffer.Bytes())
 
-	//验签规则
-	//拼接body+ts+randStr+salt (全部是UTF-8 string)
-	//sha256 得到sign
-	buffer.WriteString(cast.ToString(ts))
-	buffer.WriteString(randStr)
-	buffer.WriteString(g.apiSalt)
-
-	mySign := fmt.Sprintf("%X", sha256.Sum256(buffer.Bytes()))
-	if mySign != sign {
-		http.Error(w, "", http.StatusForbidden)
-		return
-	}
 
 	//防重放检测
 	nx := g.redis.SetNX(r.Context(), consts.RdsKeyOpenapiNoReplay(randStr), 1, time.Second*60).Val()

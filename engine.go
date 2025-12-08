@@ -55,7 +55,7 @@ type NewEngineIn struct {
 	Handles    []Handler `group:"Handles"`
 }
 
-func NewEngine(p NewEngineIn) (*Engine, EngineContext) {
+func NewEngine(p NewEngineIn) (*Engine, EngineContext, error) {
 	e := &Engine{
 		envBase:   p.EnvBase,
 		natsConn:  p.NatsConn,
@@ -66,12 +66,16 @@ func NewEngine(p NewEngineIn) (*Engine, EngineContext) {
 	}
 	e.ctx, e.cancel = context.WithCancel(context.Background())
 	if len(p.Components) > 0 {
-		e.registerComponentHandle(p.Components...)
+		if err := e.registerComponentHandle(p.Components...); err != nil {
+			return nil, nil, fmt.Errorf("failed to register component handlers: %w", err)
+		}
 	}
 	if len(p.Handles) > 0 {
-		e.registerRpcHandle(p.Handles...)
+		if err := e.registerRpcHandle(p.Handles...); err != nil {
+			return nil, nil, fmt.Errorf("failed to register RPC handlers: %w", err)
+		}
 	}
-	return e, e.ctx
+	return e, e.ctx, nil
 }
 
 // Start 启动完毕之后 注册进程名
@@ -107,12 +111,13 @@ func (e *Engine) Start() (err error) {
 
 	//定时续约 ProcAlive
 	Go(func() {
-		tick := time.Tick(expire/2 - 10*time.Second) //一个生命周期 2次心跳
+		ticker := time.NewTicker(expire/2 - 10*time.Second) //一个生命周期 2次心跳
+		defer ticker.Stop()
 		for {
 			select {
 			case <-e.ctx.Done():
 				return
-			case <-tick:
+			case <-ticker.C:
 				suc := e.redis.Expire(e.ctx, aliveKey, expire).Val()
 				if !suc { //兜底机制: key不存在了 Expire会设置失败 此时setNx一下
 					e.redis.SetNX(e.ctx, aliveKey, 0, expire)
@@ -178,11 +183,11 @@ func (e *Engine) Stop() error {
 }
 
 // 注册组件
-func (e *Engine) register(handlers ...Handler) {
+func (e *Engine) register(handlers ...Handler) error {
 	// 这里需要反射得到所有方法
 	for _, handler := range handlers {
 		if handler.Key() == "" || slices.ContainsFunc([]rune(handler.Key()), func(r rune) bool { return unicode.IsUpper(r) }) {
-			panic("handler key() 不能为空,必须为全小写")
+			return fmt.Errorf("handler key() 不能为空,必须为全小写, 实际值: %q", handler.Key())
 		}
 		revTp := reflect.TypeOf(handler)
 		for i := range revTp.NumMethod() {
@@ -209,34 +214,33 @@ func (e *Engine) register(handlers ...Handler) {
 			router := fmt.Sprintf("%s.%s", handler.Key(), r)
 			router = strings.ToLower(router)
 			if _, ok := e.methodMap[router]; ok {
-				panic("重复注册:" + funcName)
+				return fmt.Errorf("handler 重复注册: [%s] (方法: %s)", router, funcName)
 			}
 
 			if r != consts.CmdGetComponentDetail && r != consts.CmdInnerDisband {
 				//Inner特殊处理
-				routerCheck := strings.ReplaceAll(router, "Inner", "")
-				routerCheck = strings.ReplaceAll(router, "inner", "")
+				routerCheck := strings.ReplaceAll(router, "inner", "")
 
 				//限定入参
 				cut, found := strings.CutSuffix(refFunc.Type.In(2).String(), "Req")
 				if !found {
-					panic(fmt.Sprintf("Handle:[%s] 入参错误,未以Req结尾", funcName))
+					return fmt.Errorf("handler [%s]: 入参错误, 未以Req结尾, 实际参数类型: %s", funcName, refFunc.Type.In(2).String())
 				}
 				cut = strings.ReplaceAll(cut, "pb", "")
 				cut = strings.ReplaceAll(cut, "*", "")
 				if !strings.EqualFold(cut, routerCheck) {
-					panic(fmt.Sprintf("Handle:[%s] 命名与参数不匹配", funcName))
+					return fmt.Errorf("handler [%s]: 命名不匹配, 方法名 [%s] 与参数类型 [%s] 对应关系不一致", funcName, r, refFunc.Type.In(2).String())
 				}
 
 				//限定出参
 				cut, found = strings.CutSuffix(refFunc.Type.Out(0).String(), "Resp")
 				if !found {
-					panic(fmt.Sprintf("Handle:[%s] 出参错误,未以Resp结尾", funcName))
+					return fmt.Errorf("handler [%s]: 返回值错误, 未以Resp结尾, 实际返回类型: %s", funcName, refFunc.Type.Out(0).String())
 				}
 				cut = strings.ReplaceAll(cut, "pb", "")
 				cut = strings.ReplaceAll(cut, "*", "")
 				if !strings.EqualFold(cut, routerCheck) {
-					panic(fmt.Sprintf("Handle:[%s] 命名返回值不匹配", funcName))
+					return fmt.Errorf("handler [%s]: 返回值命名不匹配, 方法名 [%s] 与返回类型 [%s] 对应关系不一致", funcName, r, refFunc.Type.Out(0).String())
 				}
 			}
 
@@ -280,12 +284,15 @@ func (e *Engine) register(handlers ...Handler) {
 			e.methodMap[router] = doFunc
 		}
 	}
+	return nil
 }
 
 // registerRpcHandle 注册RPC服务 Rpc提供给服务间调用
 // 需要传入真实的handle实例
-func (e *Engine) registerRpcHandle(handlers ...Handler) {
-	e.register(handlers...)
+func (e *Engine) registerRpcHandle(handlers ...Handler) error {
+	if err := e.register(handlers...); err != nil {
+		return err
+	}
 
 	for _, handler := range handlers {
 		//同求请求回复队列 无装填服务 组件 共用  这里用通配符兼容
@@ -301,7 +308,7 @@ func (e *Engine) registerRpcHandle(handlers ...Handler) {
 			})
 		})
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("failed to subscribe RPC queue for handler %s: %w", handler.Key(), err)
 		}
 
 		//停机前解除订阅
@@ -312,6 +319,7 @@ func (e *Engine) registerRpcHandle(handlers ...Handler) {
 			slog.Debug("Unsubscribe Rpc")
 		})
 	}
+	return nil
 }
 
 func (e *Engine) onRpcReqeust(msg *nats.Msg, handler Handler) {
@@ -367,9 +375,10 @@ func (e *Engine) onRpcReqeust(msg *nats.Msg, handler Handler) {
 
 // registerComponentHandle 注册组件handle
 // 传入handle指针,需要包含公共单例对象
-func (e *Engine) registerComponentHandle(handlers ...Handler) {
-	e.register(handlers...)
-	// 这里监听创建方法
+func (e *Engine) registerComponentHandle(handlers ...Handler) error {
+	if err := e.register(handlers...); err != nil {
+		return err
+	}
 	for _, handler := range handlers {
 		//由匹配服选择进程 来调用
 		sbj := consts.SubjectComponentCreate(e.envBase.GameName, e.envBase.ProcName, handler.Key())
@@ -390,4 +399,5 @@ func (e *Engine) registerComponentHandle(handlers ...Handler) {
 			sub.Unsubscribe()
 		})
 	}
+	return nil
 }

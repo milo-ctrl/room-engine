@@ -152,7 +152,9 @@ func (c *Conn) check() {
 
 func (c *Conn) loopCheck() {
 	go func() {
-		for range time.Tick(time.Second * 60) {
+		ticker := time.NewTicker(time.Second * 60)
+		defer ticker.Stop()
+		for range ticker.C {
 			c.check()
 		}
 	}()
