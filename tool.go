@@ -102,10 +102,11 @@ func (h *Helper) PushMsgToClient(uid string, msg any) error {
 	return err
 }
 
-// Broadcast 广播消息 包括观众 exceptUids指定的用户 不会收到推送
+// Broadcast 广播消息给指定用户，exceptUids指定的用户不会收到推送
 // 通常用法中 用PushMsgToClient 给当前玩家或者当前阵营发送像手牌这种敏感数据的消息  对其他人广播脱敏数据
-func (h *Helper) Broadcast(liveIds []string, msg any, exceptUids ...string) {
+func (h *Helper) Broadcast(uids []string, msg any, exceptUids ...string) {
 	eventName := h.MsgToEventName(msg)
+	slog.Info("BroadcastAAA", "uids", uids, "eventName", eventName, "msg", msg, "exceptUids", exceptUids)
 	nMsg := &nats.Msg{
 		Header: nats.Header{
 			consts.HeaderCmd:        []string{eventName},
@@ -113,11 +114,11 @@ func (h *Helper) Broadcast(liveIds []string, msg any, exceptUids ...string) {
 		},
 	}
 	nMsg.Data, _ = serializer.Default.Marshal(msg)
-	for _, liveHouseId := range liveIds {
-		nMsg.Subject = consts.SubjectComponentEventLiveHouse(liveHouseId)
+	for _, uid := range uids {
+		nMsg.Subject = consts.SubjectComponentEventUid(uid)
 		err := h.natsConn.PublishMsg(nMsg)
 		if err != nil { //&& !errors.Is(err, nats.ErrNoResponders)
-			slog.Error("Broadcast  err", "liveHoseId", liveHouseId, "eventName", eventName, "err", err)
+			slog.Error("Broadcast err", "uid", uid, "eventName", eventName, "err", err)
 		}
 	}
 }

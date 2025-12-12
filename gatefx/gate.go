@@ -36,14 +36,13 @@ import (
 )
 
 type Gate struct {
-	natsConn    *natsfx.Conn
-	servePort   int
-	redis       *redis.Client
-	wsWg        sync.WaitGroup
-	ctx         context.Context
-	cancel      context.CancelCauseFunc
-	envBase     *env.Base
-
+	natsConn  *natsfx.Conn
+	servePort int
+	redis     *redis.Client
+	wsWg      sync.WaitGroup
+	ctx       context.Context
+	cancel    context.CancelCauseFunc
+	envBase   *env.Base
 
 	baseMsgPool sync.Pool
 	natsMsgPool sync.Pool
@@ -72,8 +71,6 @@ type NewGateIn struct {
 	ServePort int `name:"ServePort"`
 	Redis     *redis.Client
 	EnvBase   *env.Base
-
-
 }
 
 func NewGate(p NewGateIn) (*Gate, error) {
@@ -97,8 +94,6 @@ func NewGate(p NewGateIn) (*Gate, error) {
 		servePort: p.ServePort,
 		redis:     p.Redis,
 		envBase:   p.EnvBase,
-
-
 	}
 	g.baseMsgPool.New = func() interface{} {
 		return &gatepb.BaseMsg{}
@@ -111,6 +106,8 @@ func NewGate(p NewGateIn) (*Gate, error) {
 }
 
 func (g *Gate) Run() {
+
+	slog.Info("Gate Run() called", "env", g.envBase.Environment)
 	http.HandleFunc("GET /party/health", g.health)
 	http.HandleFunc("GET /party", g.wsHandle)
 	http.HandleFunc("POST /party/api/{gameName}/{comKey}/{handle}", g.apiHandle)
@@ -156,7 +153,6 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 		uid = token
 	} else {
 		var err error
-		//TODO 这里是登陆修改这里就好
 		uid, err = g.AppsJscode2session(token)
 		if err != nil {
 			http.Error(w, "token parser fail", http.StatusForbidden)
@@ -305,10 +301,10 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 		if handle == "ping" {
 			lastPingTime = time.Now()
 			//TODO 这里确实需要一个房间ID, 心跳到哪一个房间内, 知道房间是否还存在, 后面想想怎么处理
-			// if pingErr := g.ping(baseMsg, conn, liveId); pingErr != nil {
-			// 	cancelFunc(fmt.Errorf("ping Write:%w", pingErr))
-			// 	return
-			// }
+			if pingErr := g.ping(baseMsg, conn, ""); pingErr != nil {
+				cancelFunc(fmt.Errorf("ping Write:%w", pingErr))
+				return
+			}
 			allowed := pingLimiter.AllowN(time.Now(), 1)
 			if allowed {
 				g.redis.Expire(g.ctx, consts.RdsKeyUserOnlineState(uid), 130*time.Second)
@@ -415,8 +411,6 @@ func (g *Gate) publishUserLifeEvent(uid, connId string, state int) {
 	eventbus.Publish(g.natsConn, consts.EventTopicUserConnChanged(uid), e)
 }
 
-
-
 func (g *Gate) apiHandle(w http.ResponseWriter, r *http.Request) {
 	//if r.Method != http.MethodPost {
 	//	http.Error(w, "", http.StatusMethodNotAllowed)
@@ -450,7 +444,6 @@ func (g *Gate) apiHandle(w http.ResponseWriter, r *http.Request) {
 	}
 	bodyBts := make([]byte, buffer.Len())
 	copy(bodyBts, buffer.Bytes())
-
 
 	//防重放检测
 	nx := g.redis.SetNX(r.Context(), consts.RdsKeyOpenapiNoReplay(randStr), 1, time.Second*60).Val()

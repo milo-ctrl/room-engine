@@ -238,6 +238,7 @@ func onComponentCreate(msg *nats.Msg, handler Handler, e *Engine) {
 	if err != nil {
 		bt.Logger.Error("flushTimeout err", "err", err) //做个记录监控
 	}
+	slog.Info("onstartA", "req", req)
 
 	//5,启动组件
 	err = ins.OnStart(req)
@@ -446,6 +447,7 @@ func checkCreateComponentReq(msg *nats.Msg) (*baserpcpb.CreateComponentReq, []st
 		createComponentErrResp(msg, -100, "uids is empty")
 		return nil, nil, nil, nil, true
 	}
+	slog.Info("checkCreateComponentReq", "uids", uids, "uidLiveIdMap", uidLiveIdMap)
 	liveIds = lo.Uniq(liveIds)
 	if len(liveIds) <= 0 {
 		createComponentErrResp(msg, -100, "liveHouseId is empty")
@@ -587,17 +589,14 @@ func (bt *BaseComponent) PushMsgToClient(uid string, msg any) error {
 	return ErrInvalidUid
 }
 
-// Broadcast 广播消息 包括观众 exceptUids指定的用户 不会收到推送
-// 通常用法中 用PushMsgToClient 给当前玩家或者当前阵营发送像手牌这种敏感数据的消息  对其他人广播脱敏数据
+// Broadcast 广播消息给所有玩家，exceptUids指定的用户不会收到推送
 func (bt *BaseComponent) Broadcast(msg any, exceptUids ...string) {
-	var liveIds []string
+	var uids []string
 	bt.playerSource.Range(func(key, value any) bool {
-		ps := value.(*playerSource)
-		liveIds = append(liveIds, ps.liveId)
+		uids = append(uids, key.(string))
 		return true
 	})
-	liveIds = lo.Uniq(liveIds)
-	bt.Helper.Broadcast(liveIds, msg, exceptUids...)
+	bt.Helper.Broadcast(uids, msg, exceptUids...)
 }
 
 // 通过字符串方法名调用组件方法
