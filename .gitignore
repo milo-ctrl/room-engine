@@ -1,4 +1,25 @@
-.idea
+# Build outputs
+build/
+dist/
+
+# Coverage
+coverage.out
+coverage.html
+
+# Logs and temp
+*.log
+*.tmp
+*.bak
+
+# OS files
+.DS_Store
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Generated test artifacts
+**/*.testcache/.idea
 .DS_Store
 *.log
 *.log.*
