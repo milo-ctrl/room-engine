@@ -1,4 +1,4 @@
-module room-engine
+module github.com/milo-ctrl/room-engine
 
 go 1.24.2
 
