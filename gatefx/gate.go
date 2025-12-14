@@ -513,8 +513,9 @@ func (g *Gate) AppsJscode2session(loginCode string) (string, error) {
 	       header:
 	          sdk中默认填充content-type请求头，若不需要填充除content-type之外的请求头，删除该参数即可
 	*/
+	slog.Info("抖音相关的信息", "id", g.envBase.DouyinAppId, "secret", g.envBase.DouyinAppSecret, "code", loginCode)
 	sdkRequest := &openApiSdkClient.AppsJscode2sessionRequest{}
-	sdkRequest.SetAnonymousCode(g.envBase.DouyinAppId)
+	// sdkRequest.SetAnonymousCode(g.envBase.DouyinAppId)
 	sdkRequest.SetCode(loginCode) // 前端获取的code
 	sdkRequest.SetAppid(g.envBase.DouyinAppId)
 	sdkRequest.SetSecret(g.envBase.DouyinAppSecret)
