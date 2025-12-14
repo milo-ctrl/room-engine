@@ -150,7 +150,10 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 
 	var uid string
 	if g.envBase.Environment != env.Prod && strings.HasPrefix(token, "test") { //非正式服 允许test开头的的uid直接连接
-		uid = token
+		// 生成伪uid用于测试，格式：test-{uuid}
+		testUuid, _ := uuid.NewV7()
+		uid = fmt.Sprintf("test-%s", testUuid.String())
+		slog.Debug("test mode uid generated", "uid", uid)
 	} else {
 		var err error
 		uid, err = g.AppsJscode2session(token)
