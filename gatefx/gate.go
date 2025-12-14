@@ -15,12 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"room-engine/consts"
-	"room-engine/consts/gatepb"
-	"room-engine/env"
-	"room-engine/eventbus"
-	"room-engine/natsfx"
-	"room-engine/serializer"
+	"github.com/milo-ctrl/room-engine/consts"
+	"github.com/milo-ctrl/room-engine/consts/gatepb"
+	"github.com/milo-ctrl/room-engine/env"
+	"github.com/milo-ctrl/room-engine/eventbus"
+	"github.com/milo-ctrl/room-engine/natsfx"
+	"github.com/milo-ctrl/room-engine/serializer"
 
 	credential "github.com/bytedance/douyin-openapi-credential-go/client"
 	openApiSdkClient "github.com/bytedance/douyin-openapi-sdk-go/client"

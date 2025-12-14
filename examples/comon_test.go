@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	rme "room-engine"
-	"room-engine/mongofx"
+	rme "github.com/milo-ctrl/room-engine"
+	"github.com/milo-ctrl/room-engine/mongofx"
 
 	"github.com/jinzhu/copier"
 	"github.com/redis/go-redis/v9"

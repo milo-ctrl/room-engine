@@ -5,8 +5,8 @@ import (
 	"errors"
 	"log/slog"
 
-	"room-engine/consts"
-	"room-engine/natsfx"
+	"github.com/milo-ctrl/room-engine/consts"
+	"github.com/milo-ctrl/room-engine/natsfx"
 
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"

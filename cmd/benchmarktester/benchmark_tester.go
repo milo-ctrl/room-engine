@@ -1,11 +1,11 @@
 package main
 
 import (
-	"room-engine/env"
-	"room-engine/logfx"
-	"room-engine/natsfx"
-	"room-engine/redisfx"
-	"room-engine/rpc"
+	"github.com/milo-ctrl/room-engine/env"
+	"github.com/milo-ctrl/room-engine/logfx"
+	"github.com/milo-ctrl/room-engine/natsfx"
+	"github.com/milo-ctrl/room-engine/redisfx"
+	"github.com/milo-ctrl/room-engine/rpc"
 
 	"github.com/coder/websocket"
 	"go.uber.org/fx"

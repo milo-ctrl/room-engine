@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"room-engine/consts/baserpcpb"
-	"room-engine/natsfx"
-	"room-engine/rpc"
+	"github.com/milo-ctrl/room-engine/consts/baserpcpb"
+	"github.com/milo-ctrl/room-engine/natsfx"
+	"github.com/milo-ctrl/room-engine/rpc"
 
 	"github.com/redis/go-redis/v9"
 )

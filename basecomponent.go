@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"room-engine/consts"
-	"room-engine/consts/baserpcpb"
-	"room-engine/env"
-	"room-engine/eventbus"
-	"room-engine/natsfx"
-	"room-engine/serializer"
+	"github.com/milo-ctrl/room-engine/consts"
+	"github.com/milo-ctrl/room-engine/consts/baserpcpb"
+	"github.com/milo-ctrl/room-engine/env"
+	"github.com/milo-ctrl/room-engine/eventbus"
+	"github.com/milo-ctrl/room-engine/natsfx"
+	"github.com/milo-ctrl/room-engine/serializer"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"

@@ -10,7 +10,7 @@ import (
 	"slices"
 	"time"
 
-	"room-engine/env"
+	"github.com/milo-ctrl/room-engine/env"
 
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	slogcommon "github.com/samber/slog-common"

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"room-engine/consts"
+	"github.com/milo-ctrl/room-engine/consts"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"

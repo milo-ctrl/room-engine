@@ -3,8 +3,8 @@ package main
 import (
 	"time"
 
-	rme "room-engine"
-	"room-engine/gatefx"
+	rme "github.com/milo-ctrl/room-engine"
+	"github.com/milo-ctrl/room-engine/gatefx"
 
 	"github.com/spf13/viper"
 	"go.uber.org/fx"

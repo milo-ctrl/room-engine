@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"time"
 
-	"room-engine/consts"
-	"room-engine/serializer"
+	"github.com/milo-ctrl/room-engine/consts"
+	"github.com/milo-ctrl/room-engine/serializer"
 )
 
 type Handler interface {
