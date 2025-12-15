@@ -22,8 +22,7 @@ import (
 	"github.com/milo-ctrl/room-engine/natsfx"
 	"github.com/milo-ctrl/room-engine/serializer"
 
-	credential "github.com/bytedance/douyin-openapi-credential-go/client"
-	openApiSdkClient "github.com/bytedance/douyin-openapi-sdk-go/client"
+	"github.com/milo-ctrl/room-engine/douyinclient"
 	"github.com/coder/websocket"
 
 	"github.com/google/uuid"
@@ -498,36 +497,6 @@ func (g *Gate) health(w http.ResponseWriter, r *http.Request) {
  * 抖音登陆
  */
 func (g *Gate) AppsJscode2session(loginCode string) (string, error) {
-	// 初始化SDK client
-	opt := new(credential.Config).
-		SetClientKey(g.envBase.DouyinAppId).       // 改成自己的app_id
-		SetClientSecret(g.envBase.DouyinAppSecret) // 改成自己的secret
-	sdkClient, err := openApiSdkClient.NewClient(opt)
-	if err != nil {
-		slog.Error("sdk init err:", "err", err)
-		return "", errors.New("sdk parse fail")
-	}
-
-	/* 构建请求参数，该代码示例中只给出部分参数，请用户根据需要自行构建参数值
-	   	token:
-	   	   1.若用户自行维护token,将用户维护的token赋值给该参数即可
-	          2.SDK包中有获取token的函数，请根据接口path在《OpenAPI SDK 总览》文档中查找获取token函数的名字
-	            在使用过程中，请注意token互刷问题
-	       header:
-	          sdk中默认填充content-type请求头，若不需要填充除content-type之外的请求头，删除该参数即可
-	*/
 	slog.Info("抖音相关的信息", "id", g.envBase.DouyinAppId, "secret", g.envBase.DouyinAppSecret, "code", loginCode)
-	sdkRequest := &openApiSdkClient.AppsJscode2sessionRequest{}
-	// sdkRequest.SetAnonymousCode(g.envBase.DouyinAppId)
-	sdkRequest.SetCode(loginCode) // 前端获取的code
-	sdkRequest.SetAppid(g.envBase.DouyinAppId)
-	sdkRequest.SetSecret(g.envBase.DouyinAppSecret)
-	// sdk调用
-	sdkResponse, err := sdkClient.AppsJscode2session(sdkRequest)
-	if err != nil {
-		slog.Error("sdk call err:", "err", err)
-		return "", errors.New("sdk call fail")
-	}
-	slog.Error("sdk call sucess:", "sdkResponse", sdkResponse)
-	return *sdkResponse.Openid, nil
+	return douyinclient.AppsJscode2session(g.envBase.DouyinAppId, g.envBase.DouyinAppSecret, loginCode)
 }
