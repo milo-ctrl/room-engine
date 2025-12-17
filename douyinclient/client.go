@@ -1,9 +1,9 @@
 package douyinclient
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -28,20 +28,19 @@ type Response struct {
 // AppsJscode2session calls the platform API directly and returns openid.
 // Includes simple retry on transient network or 5xx HTTP errors.
 func AppsJscode2session(appid, secret, code string) (string, error) {
-	form := url.Values{}
-	form.Set("appid", appid)
-	form.Set("secret", secret)
-	form.Set("code", code)
+	q := url.Values{}
+	q.Set("appid", appid)
+	q.Set("secret", secret)
+	q.Set("code", code)
 
 	client := &http.Client{Timeout: 8 * time.Second}
 
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
-		req, err := http.NewRequest(http.MethodPost, apiURL, bytes.NewBufferString(form.Encode()))
+		req, err := http.NewRequest(http.MethodGet, apiURL+"?"+q.Encode(), nil)
 		if err != nil {
 			return "", err
 		}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -49,7 +48,9 @@ func AppsJscode2session(appid, secret, code string) (string, error) {
 			time.Sleep(time.Duration(200*(attempt+1)) * time.Millisecond)
 			continue
 		}
-		defer resp.Body.Close()
+		// Read body once for logging and parsing
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
 
 		if resp.StatusCode >= 500 {
 			lastErr = errors.New("server error: " + resp.Status)
@@ -57,10 +58,10 @@ func AppsJscode2session(appid, secret, code string) (string, error) {
 			continue
 		}
 		if resp.StatusCode != http.StatusOK {
+			slog.Info("douyinclient non-200 response", "status", resp.StatusCode, "body", string(bodyBytes))
 			// try to parse body for message
 			var r Response
-			_ = json.NewDecoder(resp.Body).Decode(&r)
-			slog.Debug("douyinclient non-200 response", "status", resp.StatusCode, "resp", r)
+			_ = json.Unmarshal(bodyBytes, &r)
 			if r.Msg != "" {
 				return "", errors.New(r.Msg)
 			}
@@ -71,13 +72,13 @@ func AppsJscode2session(appid, secret, code string) (string, error) {
 		}
 
 		var r Response
-		if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+		if err := json.Unmarshal(bodyBytes, &r); err != nil {
 			lastErr = err
 			time.Sleep(time.Duration(200*(attempt+1)) * time.Millisecond)
 			continue
 		}
 
-		slog.Debug("douyinclient response", "status", resp.StatusCode, "resp", r)
+		slog.Info("douyinclient response", "status", resp.StatusCode, "resp", r, "body", string(bodyBytes))
 
 		var openid string
 		if r.Openid != nil {
