@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
@@ -59,6 +60,7 @@ func AppsJscode2session(appid, secret, code string) (string, error) {
 			// try to parse body for message
 			var r Response
 			_ = json.NewDecoder(resp.Body).Decode(&r)
+			slog.Debug("douyinclient non-200 response", "status", resp.StatusCode, "resp", r)
 			if r.Msg != "" {
 				return "", errors.New(r.Msg)
 			}
@@ -74,6 +76,8 @@ func AppsJscode2session(appid, secret, code string) (string, error) {
 			time.Sleep(time.Duration(200*(attempt+1)) * time.Millisecond)
 			continue
 		}
+
+		slog.Debug("douyinclient response", "status", resp.StatusCode, "resp", r)
 
 		var openid string
 		if r.Openid != nil {

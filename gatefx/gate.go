@@ -22,8 +22,8 @@ import (
 	"github.com/milo-ctrl/room-engine/natsfx"
 	"github.com/milo-ctrl/room-engine/serializer"
 
-	"github.com/milo-ctrl/room-engine/douyinclient"
 	"github.com/coder/websocket"
+	"github.com/milo-ctrl/room-engine/douyinclient"
 
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
