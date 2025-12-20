@@ -337,8 +337,8 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 				cancelFunc(fmt.Errorf("ping Write:%w", pingErr))
 				return
 			}
-			baseMsg.Reset()
-			g.baseMsgPool.Put(baseMsg)
+			// baseMsg.Reset()
+			// g.baseMsgPool.Put(baseMsg)
 			allowed := pingLimiter.AllowN(time.Now(), 1)
 			if allowed {
 				g.redis.Expire(g.ctx, consts.RdsKeyUserOnlineState(uid), 130*time.Second)
