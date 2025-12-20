@@ -333,10 +333,12 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 		if handle == "ping" {
 			lastPingTime = time.Now()
 			//TODO 这里确实需要一个房间ID, 心跳到哪一个房间内, 知道房间是否还存在, 后面想想怎么处理
-			if pingErr := g.ping(baseMsg, conn, ""); pingErr != nil {
+			if pingErr := g.ping(&jsonMsg, conn, ""); pingErr != nil {
 				cancelFunc(fmt.Errorf("ping Write:%w", pingErr))
 				return
 			}
+			baseMsg.Reset()
+			g.baseMsgPool.Put(baseMsg)
 			allowed := pingLimiter.AllowN(time.Now(), 1)
 			if allowed {
 				g.redis.Expire(g.ctx, consts.RdsKeyUserOnlineState(uid), 130*time.Second)
@@ -411,29 +413,40 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (g *Gate) ping(baseMsg *gatepb.BaseMsg, conn *websocket.Conn, liveId string) error {
+func (g *Gate) ping(jsonMsg *JsonBaseMsg, conn *websocket.Conn, liveId string) error {
 	now := time.Now()
 
-	reqData := baseMsg.Data
-	pinResp := &gatepb.PingResp{Ts: now.UnixMilli(), ForwardTs: now.UnixMilli()}
+	// 构造 JSON 格式的 ping 响应
+	pingResp := map[string]any{
+		"ts":           now.UnixMilli(),
+		"forwardTs":    now.UnixMilli(),
+		"forwardState": 0,
+	}
 
-	pinReq := &gatepb.PingReq{}
-	_ = serializer.Default.Unmarshal(reqData, pinReq)
-	if pinReq.ForwardToGameName != "" { //指定了转发游戏
-		comKey := "room" //这里不写死怎么办??
-		suj := consts.SubjectReqRetLiveHouse(pinReq.ForwardToGameName, comKey, liveId)
-		_, err := g.natsConn.Request(suj, nil, 5*time.Second) //只需要探测下监听是否存在
-		if errors.Is(err, nats.ErrNoResponders) {             //没有监听 则说明游戏不存在了
-			pinResp.ForwardTs = time.Now().UnixMilli()
-			pinResp.ForwardState = 1 //没有游戏房了
-		} else if err != nil {
-			baseMsg.Code = -500
-			baseMsg.ErrMsg = "server error"
+	// 如果前端指定了转发游戏名，尝试探测该游戏是否存在
+	if jsonMsg.Data != nil {
+		if forwardGameName, ok := jsonMsg.Data["forwardToGameName"].(string); ok && forwardGameName != "" {
+			comKey := "room" //这里不写死怎么办??
+			suj := consts.SubjectReqRetLiveHouse(forwardGameName, comKey, liveId)
+			_, err := g.natsConn.Request(suj, nil, 5*time.Second) //只需要探测下监听是否存在
+			if errors.Is(err, nats.ErrNoResponders) {             //没有监听 则说明游戏不存在了
+				pingResp["forwardTs"] = time.Now().UnixMilli()
+				pingResp["forwardState"] = 1 //没有游戏房了
+			} else if err != nil {
+				pingResp["forwardState"] = -1 //错误
+			}
 		}
 	}
 
-	baseMsg.Data, _ = serializer.Default.Marshal(pinResp)
-	bts, _ := serializer.Default.Marshal(baseMsg)
+	// 构造 JSON 响应消息
+	jsonResp := JsonBaseMsg{
+		Cmd:   jsonMsg.Cmd,
+		ReqId: jsonMsg.ReqId,
+		Code:  0,
+		Data:  pingResp,
+	}
+
+	bts, _ := json.Marshal(jsonResp)
 	err := conn.Write(g.ctx, websocket.MessageBinary, bts)
 	if err != nil {
 		return err
