@@ -3,6 +3,7 @@ package rme
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -17,7 +18,6 @@ import (
 	"github.com/milo-ctrl/room-engine/env"
 	"github.com/milo-ctrl/room-engine/natsfx"
 	"github.com/milo-ctrl/room-engine/rpc"
-	"github.com/milo-ctrl/room-engine/serializer"
 
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
@@ -88,14 +88,23 @@ func (h *Helper) MsgToEventName(msg any) string {
 }
 
 // PushMsgToClient 发消息给客户端
+// 消息以 JSON 格式序列化发送给前端
 func (h *Helper) PushMsgToClient(uid string, msg any) error {
 	eventName := h.MsgToEventName(msg)
+
+	// 将 proto 消息转为 JSON 字节数组
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		slog.Error("PushMsgToClient Marshal err", "uid", uid, "eventName", eventName, "err", err)
+		return err
+	}
+
 	nMsg := &nats.Msg{
 		Subject: consts.SubjectComponentEventUid(uid), //服务端往个人推送的subject 不带游戏名 (有限制不可能同时打开2个游戏)
 		Header:  nats.Header{consts.HeaderCmd: []string{eventName}},
+		Data:    msgBytes,
 	}
-	nMsg.Data, _ = serializer.Default.Marshal(msg)
-	err := h.natsConn.PublishMsg(nMsg)
+	err = h.natsConn.PublishMsg(nMsg)
 	if err != nil { //&& !errors.Is(err, nats.ErrNoResponders)
 		slog.Error("PushMsgToClient  err", "uid", uid, "eventName", eventName, "err", err)
 	}
@@ -104,16 +113,24 @@ func (h *Helper) PushMsgToClient(uid string, msg any) error {
 
 // Broadcast 广播消息给指定用户，exceptUids指定的用户不会收到推送
 // 通常用法中 用PushMsgToClient 给当前玩家或者当前阵营发送像手牌这种敏感数据的消息  对其他人广播脱敏数据
+// 消息以 JSON 格式序列化发送给前端
 func (h *Helper) Broadcast(uids []string, msg any, exceptUids ...string) {
 	eventName := h.MsgToEventName(msg)
-	slog.Info("BroadcastAAA", "uids", uids, "eventName", eventName, "msg", msg, "exceptUids", exceptUids)
+
+	// 将 proto 消息转为 JSON 字节数组
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		slog.Error("Broadcast Marshal err", "eventName", eventName, "err", err)
+		return
+	}
+
 	nMsg := &nats.Msg{
 		Header: nats.Header{
 			consts.HeaderCmd:        []string{eventName},
 			consts.HeaderExceptUids: exceptUids, //需要排除的Uids 在网关层 做校验进行排除
 		},
+		Data: msgBytes,
 	}
-	nMsg.Data, _ = serializer.Default.Marshal(msg)
 	for _, uid := range uids {
 		nMsg.Subject = consts.SubjectComponentEventUid(uid)
 		err := h.natsConn.PublishMsg(nMsg)

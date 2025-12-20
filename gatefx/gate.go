@@ -222,10 +222,12 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 	defer g.publishUserLifeEvent(uid, connId, 0) //下线
 
 	var errResp = func(baseMsg *gatepb.BaseMsg, code int32, errMsg string) {
-		baseMsg.Data = nil
-		baseMsg.ErrMsg = errMsg
-		baseMsg.Code = code
-		bts, _ := serializer.Default.Marshal(baseMsg)
+		// 返回 JSON 格式的错误响应
+		jsonErr := JsonBaseMsg{
+			Code:   code,
+			ErrMsg: errMsg,
+		}
+		bts, _ := json.Marshal(jsonErr)
 		err = conn.Write(ctx, websocket.MessageBinary, bts)
 		if err != nil {
 			cancelFunc(fmt.Errorf("errResp:%w", err))
@@ -245,24 +247,41 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				cmd := msg.Header.Get(consts.HeaderCmd)
-				baseMsg := g.baseMsgPool.Get().(*gatepb.BaseMsg)
-				baseMsg.Data = msg.Data
-				baseMsg.Cmd = cmd
-				bts, _ := serializer.Default.Marshal(baseMsg)
+
+				// 将 proto 推送消息转为 JSON 格式发送给前端
+				jsonResp := JsonBaseMsg{
+					Cmd:  cmd,
+					Code: 0,
+				}
+
+				// 将 proto 字节数组转为 JSON map
+				if len(msg.Data) > 0 {
+					var dataMap map[string]any
+					if err := json.Unmarshal(msg.Data, &dataMap); err != nil {
+						slog.Error("Unmarshal push data err", "err", err, "cmd", cmd)
+						jsonResp.Code = -500
+						jsonResp.ErrMsg = "parse data fail"
+					} else {
+						jsonResp.Data = dataMap
+					}
+				}
+
+				// 序列化为 JSON 并发送
+				bts, _ := json.Marshal(jsonResp)
 				err := conn.Write(ctx, websocket.MessageBinary, bts)
 				if err != nil {
 					cancelFunc(fmt.Errorf("msgChan Write:%w", err))
 					return
 				}
-				baseMsg.Reset()
-				g.baseMsgPool.Put(baseMsg)
 			case <-multiConnChan: //顶号 发送最后一个消息
 				{
-					baseMsg := g.baseMsgPool.Get().(*gatepb.BaseMsg)
-					baseMsg.Cmd = "gate.gate.eventdisconnect"
-					bts, _ := serializer.Default.Marshal(baseMsg)
-					baseMsg.Reset()
-					g.baseMsgPool.Put(baseMsg)
+					// 转为 JSON 格式发送给前端
+					jsonMsg := JsonBaseMsg{
+						Cmd:    "gate.gate.eventdisconnect",
+						Code:   0,
+						ErrMsg: "account logged in elsewhere",
+					}
+					bts, _ := json.Marshal(jsonMsg)
 					err = conn.Write(context.Background(), websocket.MessageBinary, bts)
 					if err != nil {
 						slog.Error("eventdisconnect  err", "err", err)
