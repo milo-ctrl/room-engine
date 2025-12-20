@@ -3,6 +3,7 @@ package gatefx
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 
 	"errors"
 	"fmt"
@@ -33,6 +34,15 @@ import (
 	"go.uber.org/fx"
 	"golang.org/x/time/rate"
 )
+
+// JsonBaseMsg 用于前端 JSON 通信的消息结构
+type JsonBaseMsg struct {
+	Cmd    string         `json:"cmd"`
+	Data   map[string]any `json:"data,omitempty"`
+	ErrMsg string         `json:"errMsg,omitempty"`
+	Code   int32          `json:"code,omitempty"`
+	ReqId  int32          `json:"reqId,omitempty"`
+}
 
 type Gate struct {
 	natsConn  *natsfx.Conn
@@ -279,13 +289,31 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 			cancelFunc(fmt.Errorf("conn.Read:%w", err))
 			return
 		}
-		// 新增日志，输出收到的原始消息内容
-		slog.Info("Received raw msg", "msg", string(msg))
-		baseMsg := g.baseMsgPool.Get().(*gatepb.BaseMsg)
-		if err := serializer.Default.Unmarshal(msg, baseMsg); err != nil {
-			slog.Error("Unmarshal err", "err", err, "raw", string(msg))
-			errResp(baseMsg, -403, "Unmarshal fail")
+
+		// 使用 JSON 反序列化前端消息
+		var jsonMsg JsonBaseMsg
+		if err := json.Unmarshal(msg, &jsonMsg); err != nil {
+			slog.Error("JSON Unmarshal err", "err", err, "raw", string(msg))
+			baseMsg := g.baseMsgPool.Get().(*gatepb.BaseMsg)
+			errResp(baseMsg, -403, "JSON Unmarshal fail")
+			g.baseMsgPool.Put(baseMsg)
 			continue
+		}
+
+		baseMsg := g.baseMsgPool.Get().(*gatepb.BaseMsg)
+		baseMsg.Cmd = jsonMsg.Cmd
+		baseMsg.ReqId = jsonMsg.ReqId
+
+		// 将 JSON data 转为 proto 字节数组
+		if jsonMsg.Data != nil {
+			dataBytes, err := json.Marshal(jsonMsg.Data)
+			if err != nil {
+				slog.Error("Marshal data err", "err", err)
+				errResp(baseMsg, -403, "Marshal data fail")
+				g.baseMsgPool.Put(baseMsg)
+				continue
+			}
+			baseMsg.Data = dataBytes
 		}
 
 		//完全不允许内部rpc通过网关 网关遇到此类请求 直接断开
@@ -325,8 +353,9 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 		nasMsg.Subject = suj
 		nasMsg.Data = baseMsg.Data
 		nasMsg.Header = nats.Header{
-			consts.HeaderCmd: []string{strings.Join(sp[1:], ".")},
-			consts.HeaderUid: []string{uid},
+			consts.HeaderCmd:     []string{strings.Join(sp[1:], ".")},
+			consts.HeaderUid:     []string{uid},
+			consts.HeaderReqType: []string{cast.ToString(serializer.KindJson)},
 		}
 
 		retMag, err := g.natsConn.RequestMsg(nasMsg, 5*time.Second)
@@ -336,25 +365,41 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 		clear(nasMsg.Header)
 		g.natsMsgPool.Put(nasMsg)
 
-		baseMsg.Data = nil
-		baseMsg.ErrMsg = ""
-		if err != nil {
-			if errors.Is(err, nats.ErrNoResponders) {
-				baseMsg.Code = -404
-			} else if errors.Is(err, nats.ErrTimeout) {
-				baseMsg.Code = -504
-			} else {
-				baseMsg.Code = -500
-			}
-			baseMsg.ErrMsg = "reqeust fail!"
-			slog.Error("RequestMsg err", "uid", uid, "cmd", baseMsg.Cmd, "err", err)
-		} else {
-			baseMsg.Code = cast.ToInt32(retMag.Header.Get("code"))
-			baseMsg.ErrMsg = retMag.Header.Get("msg")
-			baseMsg.Data = retMag.Data
+		// 构造 JSON 响应消息
+		jsonResp := JsonBaseMsg{
+			Cmd:   jsonMsg.Cmd,
+			ReqId: jsonMsg.ReqId,
 		}
 
-		bts, _ := serializer.Default.Marshal(baseMsg)
+		if err != nil {
+			if errors.Is(err, nats.ErrNoResponders) {
+				jsonResp.Code = -404
+			} else if errors.Is(err, nats.ErrTimeout) {
+				jsonResp.Code = -504
+			} else {
+				jsonResp.Code = -500
+			}
+			jsonResp.ErrMsg = "request fail!"
+			slog.Error("RequestMsg err", "uid", uid, "cmd", jsonMsg.Cmd, "err", err)
+		} else {
+			jsonResp.Code = cast.ToInt32(retMag.Header.Get("code"))
+			jsonResp.ErrMsg = retMag.Header.Get("msg")
+
+			// 将内部服务返回的 proto 字节数组转为 JSON map
+			if len(retMag.Data) > 0 {
+				var dataMap map[string]any
+				if err := json.Unmarshal(retMag.Data, &dataMap); err != nil {
+					slog.Error("Unmarshal response data err", "err", err)
+					jsonResp.Code = -500
+					jsonResp.ErrMsg = "parse response fail"
+				} else {
+					jsonResp.Data = dataMap
+				}
+			}
+		}
+
+		// 将 JSON 响应序列化并发送
+		bts, _ := json.Marshal(jsonResp)
 		baseMsg.Reset()
 		g.baseMsgPool.Put(baseMsg)
 
