@@ -279,9 +279,11 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 			cancelFunc(fmt.Errorf("conn.Read:%w", err))
 			return
 		}
+		// 新增日志，输出收到的原始消息内容
+		slog.Info("Received raw msg", "msg", string(msg))
 		baseMsg := g.baseMsgPool.Get().(*gatepb.BaseMsg)
 		if err := serializer.Default.Unmarshal(msg, baseMsg); err != nil {
-			slog.Error("Unmarshal err", "err", err)
+			slog.Error("Unmarshal err", "err", err, "raw", string(msg))
 			errResp(baseMsg, -403, "Unmarshal fail")
 			continue
 		}
