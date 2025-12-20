@@ -37,10 +37,13 @@ func AppsJscode2session(appid, secret, code string) (string, error) {
 
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
-		req, err := http.NewRequest(http.MethodGet, apiURL+"?"+q.Encode(), nil)
+		fullURL := apiURL + "?" + q.Encode()
+		req, err := http.NewRequest(http.MethodGet, fullURL, nil)
 		if err != nil {
 			return "", err
 		}
+		// Log the exact request URL being sent
+		slog.Info("douyinclient request", "url", fullURL)
 
 		resp, err := client.Do(req)
 		if err != nil {

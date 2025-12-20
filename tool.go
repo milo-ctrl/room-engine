@@ -94,7 +94,7 @@ func (h *Helper) PushMsgToClient(uid string, msg any) error {
 		Subject: consts.SubjectComponentEventUid(uid), //服务端往个人推送的subject 不带游戏名 (有限制不可能同时打开2个游戏)
 		Header:  nats.Header{consts.HeaderCmd: []string{eventName}},
 	}
-	nMsg.Data, _ = serializer.Default.Marshal(msg)
+	nMsg.Data, _ = serializer.Json.Marshal(msg)
 	err := h.natsConn.PublishMsg(nMsg)
 	if err != nil { //&& !errors.Is(err, nats.ErrNoResponders)
 		slog.Error("PushMsgToClient  err", "uid", uid, "eventName", eventName, "err", err)
@@ -113,7 +113,7 @@ func (h *Helper) Broadcast(uids []string, msg any, exceptUids ...string) {
 			consts.HeaderExceptUids: exceptUids, //需要排除的Uids 在网关层 做校验进行排除
 		},
 	}
-	nMsg.Data, _ = serializer.Default.Marshal(msg)
+	nMsg.Data, _ = serializer.Json.Marshal(msg)
 	for _, uid := range uids {
 		nMsg.Subject = consts.SubjectComponentEventUid(uid)
 		err := h.natsConn.PublishMsg(nMsg)

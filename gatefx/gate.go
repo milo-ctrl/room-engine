@@ -215,7 +215,7 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 		baseMsg.Data = nil
 		baseMsg.ErrMsg = errMsg
 		baseMsg.Code = code
-		bts, _ := serializer.Default.Marshal(baseMsg)
+		bts, _ := serializer.Json.Marshal(baseMsg)
 		err = conn.Write(ctx, websocket.MessageBinary, bts)
 		if err != nil {
 			cancelFunc(fmt.Errorf("errResp:%w", err))
@@ -238,7 +238,7 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 				baseMsg := g.baseMsgPool.Get().(*gatepb.BaseMsg)
 				baseMsg.Data = msg.Data
 				baseMsg.Cmd = cmd
-				bts, _ := serializer.Default.Marshal(baseMsg)
+				bts, _ := serializer.Json.Marshal(baseMsg)
 				err := conn.Write(ctx, websocket.MessageBinary, bts)
 				if err != nil {
 					cancelFunc(fmt.Errorf("msgChan Write:%w", err))
@@ -250,7 +250,7 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 				{
 					baseMsg := g.baseMsgPool.Get().(*gatepb.BaseMsg)
 					baseMsg.Cmd = "gate.gate.eventdisconnect"
-					bts, _ := serializer.Default.Marshal(baseMsg)
+					bts, _ := serializer.Json.Marshal(baseMsg)
 					baseMsg.Reset()
 					g.baseMsgPool.Put(baseMsg)
 					err = conn.Write(context.Background(), websocket.MessageBinary, bts)
@@ -280,7 +280,7 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		baseMsg := g.baseMsgPool.Get().(*gatepb.BaseMsg)
-		if err := serializer.Default.Unmarshal(msg, baseMsg); err != nil {
+		if err := serializer.Json.Unmarshal(msg, baseMsg); err != nil {
 			slog.Error("Unmarshal err", "err", err)
 			errResp(baseMsg, -403, "Unmarshal fail")
 			continue
@@ -323,8 +323,9 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 		nasMsg.Subject = suj
 		nasMsg.Data = baseMsg.Data
 		nasMsg.Header = nats.Header{
-			consts.HeaderCmd: []string{strings.Join(sp[1:], ".")},
-			consts.HeaderUid: []string{uid},
+			consts.HeaderCmd:     []string{strings.Join(sp[1:], ".")},
+			consts.HeaderUid:     []string{uid},
+			consts.HeaderReqType: []string{cast.ToString(serializer.KindJson)},
 		}
 
 		retMag, err := g.natsConn.RequestMsg(nasMsg, 5*time.Second)
@@ -352,7 +353,7 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 			baseMsg.Data = retMag.Data
 		}
 
-		bts, _ := serializer.Default.Marshal(baseMsg)
+		bts, _ := serializer.Json.Marshal(baseMsg)
 		baseMsg.Reset()
 		g.baseMsgPool.Put(baseMsg)
 
@@ -371,7 +372,7 @@ func (g *Gate) ping(baseMsg *gatepb.BaseMsg, conn *websocket.Conn, liveId string
 	pinResp := &gatepb.PingResp{Ts: now.UnixMilli(), ForwardTs: now.UnixMilli()}
 
 	pinReq := &gatepb.PingReq{}
-	_ = serializer.Default.Unmarshal(reqData, pinReq)
+	_ = serializer.Json.Unmarshal(reqData, pinReq)
 	if pinReq.ForwardToGameName != "" { //指定了转发游戏
 		comKey := "room" //这里不写死怎么办??
 		suj := consts.SubjectReqRetLiveHouse(pinReq.ForwardToGameName, comKey, liveId)
@@ -385,8 +386,8 @@ func (g *Gate) ping(baseMsg *gatepb.BaseMsg, conn *websocket.Conn, liveId string
 		}
 	}
 
-	baseMsg.Data, _ = serializer.Default.Marshal(pinResp)
-	bts, _ := serializer.Default.Marshal(baseMsg)
+	baseMsg.Data, _ = serializer.Json.Marshal(pinResp)
+	bts, _ := serializer.Json.Marshal(baseMsg)
 	err := conn.Write(g.ctx, websocket.MessageBinary, bts)
 	if err != nil {
 		return err
