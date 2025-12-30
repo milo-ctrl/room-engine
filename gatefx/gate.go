@@ -66,10 +66,10 @@ var Module = fx.Module("gate",
 		if g == nil {
 			return fmt.Errorf("gate not initialized")
 		}
-		if envBase.Environment == env.Dev { //开发环境内嵌的网关 才会启动
-			lc.Append(fx.StopHook(func() { g.Stop(10 * time.Minute) }))
-			g.Run()
-		}
+		// if envBase.Environment == env.Dev { //开发环境内嵌的网关 才会启动
+		lc.Append(fx.StopHook(func() { g.Stop(10 * time.Minute) }))
+		g.Run()
+		// }
 		return nil
 	}),
 )
