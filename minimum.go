@@ -55,13 +55,9 @@ func Run(opts ...func(*option)) {
 		opt(o)
 	}
 
-	var envBase *env.Base
 	fxOpts := []fx.Option{
 		fx.WithLogger(FxLogger),
 		Module,
-		fx.Invoke(func(base *env.Base) {
-			envBase = base
-		}),
 	}
 	fxOpts = append(fxOpts, o.fxOptions...)
 	app := fx.New(fxOpts...)
@@ -72,7 +68,6 @@ func Run(opts ...func(*option)) {
 	if err != nil {
 		panic(err)
 	}
-	larkNotifyStart(envBase.GameName, envBase.Environment, envBase.ProcName, envBase.Version)
 
 	<-app.Wait() //不能用run run在结束时候 直接exit了 后边逻辑无法执行了
 

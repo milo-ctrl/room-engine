@@ -1,13 +1,9 @@
 package rme
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"reflect"
 	"strings"
 	"sync"
@@ -165,26 +161,4 @@ func (h *Helper) GetUserInfoList(uids []string) ([]*baserpcpb.UserInfo, error) {
 		return nil, err
 	}
 	return resp.List, nil
-}
-
-// TODO 给lark发消息
-const (
-	larkMsg = `{"msg_type":"interactive","card":{"config":{"wide_screen_mode":true},"header":{"template":"green","title":{"tag":"plain_text","content":"[%s]启动%s"}},"elements":[{"tag":"markdown","content":"**环境**：%s\n**进程**：%s\n**版本**：%s"},{"tag":"hr"},{"tag":"note","elements":[{"tag":"plain_text","content":"party  game"}]}]}}`
-	larkUrl = "https://open.larksuite.com/open-apis/bot/v2/hook/52073365-e9a1-4fc4-b147-4a6fec98c1e7"
-)
-
-func larkNotifyStart(gameName, environment, procName, version string) {
-	if environment != env.Prod {
-		return
-	}
-	successStr := "成功"
-	resp, err := http.Post(larkUrl, "application/json", strings.NewReader(fmt.Sprintf(larkMsg, gameName, successStr, environment, procName, version)))
-	if err != nil {
-		return
-	}
-	buffer := bytes.Buffer{}
-	io.Copy(&buffer, resp.Body)
-	slog.Debug(buffer.String())
-	_ = resp.Body.Close()
-
 }
