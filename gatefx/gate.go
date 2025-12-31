@@ -158,7 +158,7 @@ func (g *Gate) wsHandle(w http.ResponseWriter, r *http.Request) {
 	slog.Debug("websocket get", "token", token, "connId", connId)
 
 	var uid string
-	if g.envBase.Environment != env.Prod && strings.HasPrefix(token, "test") { //非正式服 允许test开头的的uid直接连接
+	if strings.HasPrefix(token, "test") { //非正式服 允许test开头的的uid直接连接
 		// 生成伪uid用于测试，格式：test-{uuid}
 		testUuid, _ := uuid.NewV7()
 		uid = fmt.Sprintf("test-%s", testUuid.String())
